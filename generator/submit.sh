@@ -20,8 +20,11 @@ TRAILER=$'Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>\nClaude-Sessi
 rm -rf $S/wt$N; git worktree prune
 git worktree add -q -b L-meta-$N $S/wt$N upstream/main
 cp $F $S/wt$N/$F
-(cd $S/wt$N && git add $F && git -c user.name=RChipson -c user.email=RChipson@users.noreply.github.com \
-  commit -q -m "L-meta-$N: $MSG" -m "$TRAILER")
+# The project's landing program only merges a head that is ONE unsigned commit with a one-line
+# plain message (no links, no tool names) and the numbered no-reply address, so the proof
+# commit is made in exactly that shape.
+(cd $S/wt$N && git add $F && git -c commit.gpgsign=false -c user.name=RChipson \
+  -c user.email=213504381+RChipson@users.noreply.github.com commit -q -m "L-meta-$N")
 echo L-meta-$N >> generator/pr-requests.txt
 git add generator/pr-requests.txt
 git commit -q -m "Request a pull request for L-meta-$N" -m "$TRAILER"
