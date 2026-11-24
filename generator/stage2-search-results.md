@@ -99,6 +99,9 @@ machine, printed ACCEPTED.
 | L-meta-3829, 3859, 3849, 3851, 3957, 3961 | 8224, 8234, 8239, 8248, 8262, 8278 | 1st each | ACCEPTED for 3829; the rest queued | glue on the 14-gate certificate |
 | L-meta-4091 | 8402 | 1st | queued | ordinary proof |
 | L-meta-4069 | 8396 | 2nd | queued | ordinary proof |
+| L-meta-4175, 4165 | 8432, 8435 | 1st each | queued | glue on the 14-gate certificate |
+| L-meta-4245 | 8555 | 1st | queued | ordinary proof (re-wiring inputs at the cost of one gate) |
+| L-meta-4249 | 8572 | 2nd | queued | special case of the 4245 lemma |
 
 A lesson on memory: the project's verifier already needs about 11 GB here for any file,
 and a kernel check that enumerates tens of thousands of cases adds gigabytes. Two
