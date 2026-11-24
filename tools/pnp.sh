@@ -12,12 +12,12 @@
 #                                      statement_seems_false | does_not_elaborate | exhausted |
 #                                      out_of_time | other
 #
-# Run it from your clone of YOUR FORK of brilliant-hq/pequalnp-proofs. It talks to the desk at
+# Run it from your clone of YOUR FORK of open-goat/pequalnp-proofs. It talks to the desk at
 # pequalnp.com and to GitHub through `gh`, nothing else. The rules are in https://pequalnp.com/join.txt.
 # Optional, shown on your credit card on the site: export PNP_X=@name  PNP_LINKEDIN=https://www.linkedin.com/in/name
 set -euo pipefail
 DESK=https://pequalnp.com/desk
-UPSTREAM=brilliant-hq/pequalnp-proofs
+UPSTREAM=open-goat/pequalnp-proofs
 ROOT="$(git rev-parse --show-toplevel)"
 STATE="$ROOT/.pnp"; mkdir -p "$STATE"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1 ($2)" >&2; exit 1; }; }
