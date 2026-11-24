@@ -250,6 +250,10 @@ if __name__ == '__main__':
         run('1666: raw without raw4, with its negation', wires(tg, [n4 + (SPEC1,)]), 14, range(0, 7))
         tg = {1: NONE, 2: NONE, 3: NONE, 4: DEG3, 5: NONE, 6: DEG3, 7: DEG3, 8: NONE}
         run('1665/3271: raw without raw0, with its negation', wires(tg, [n0 + (NONE,)]), 14, range(0, 7))
+    elif which == 'plain':
+        # no tags at all: the nine inputs, K gates (third argument), each NOT count
+        K = int(sys.argv[3]); ts = [int(x) for x in sys.argv[4].split(',')]
+        run(f'plain root K={K}', wires({j: NONE for j in range(9)}), K, ts)
     elif which == '3138':
         o = OR(raw[0], raw[3])
         tags = {0: DEG3, 1: NONE, 2: NONE, 3: DEG3, 4: DEG3, 5: NONE, 6: DEG3, 7: DEG3, 8: NONE}
