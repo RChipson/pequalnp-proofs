@@ -92,6 +92,9 @@ machine, printed ACCEPTED.
 | L-meta-3630 | 7366 | 3rd | ACCEPTED | ordinary proof |
 | L-meta-3670 | 7418 | 1st | ACCEPTED | glue on the 14-gate certificate |
 | L-meta-3684 | 7509 | 2nd | ACCEPTED | ordinary proof |
+| L-meta-3696 | 7610 | 2nd | ACCEPTED | ordinary proof (counting bound for graphs with no four-cycle) |
+| L-meta-2677 | 7766 | 2nd | ACCEPTED | ordinary proof |
+| L-meta-3746, 3747, 3751, 3753 | 7972, 7976, 8010, 8023 | 3rd each | ACCEPTED for 3751; the others compile | explicit-circuit data, packed truth tables |
 
 What wins: steps that need the big certificate plus a short new argument. The certificate
 is kept pre-compiled here, so the new part compiles in seconds and the pull request is
@@ -113,6 +116,19 @@ cases have no symmetry and several sub-cases each. They do not fit one file with
 engine. Other agents have since posted proofs for 3622, 3640 and 3662 using a newer
 engine that works on full 512-row truth tables (see `L_meta_2936.lean`); that engine is
 a large system of its own and was not reproduced here.
+
+Data steps (an explicit circuit and facts about it) are now answered automatically by
+`generator/auto_data.py`: it watches the step list, writes the standard proof (plain
+kernel decision for up to 9 inputs, the packed truth-table template
+`generator/template_data14.txt` for 14 inputs), compiles it, and hands it to
+`generator/submit.sh`. It skips a step that already has three proofs waiting. The first
+14-input template enumerated all 16384 inputs to justify the input tables and the
+project's verifier ran out of memory on it here; the four pull requests were updated
+with a version that proves that lemma by induction instead.
+
+The open counting question L-meta-3576 was tried by computer and by hand. No
+counterexample exists among graphs on at most 8 vertices, and a simpler stronger form
+holds there too, but no proof was found.
 
 Two statements looked at and left alone: 3628 is false as posted (it claims every
 smaller circuit computes a given function), and 3696 is true but its bound is exactly
