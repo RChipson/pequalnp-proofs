@@ -81,6 +81,7 @@ import PEqualNP.Defs.LratEncoding
 import PEqualNP.Defs.Core
 import PEqualNP.Defs.PointTypes
 import PEqualNP.Defs.FactorSubst
+import PEqualNP.Defs.TwoColour
 
 /-!
 # The definitions root

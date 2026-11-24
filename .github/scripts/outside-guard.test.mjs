@@ -401,3 +401,19 @@ test('a matched word that is not one of the listed literals is still sanitised',
   assert.throws(() => run(`${thm}  exact \x60(foo| y)\n`), (e) => e.message.startsWith('line 5: "??foo?" is not allowed'));
   assert.throws(() => run(`${thm}  exact \x60(tactic| y)\n`), (e) => e.message.startsWith('line 5: "\x60(tactic|" is not allowed'));
 });
+test('the bv_decide refusal says what to use instead (a repeated honest mistake)', () => {
+  assert.throws(() => checkPlainAll(`theorem PEqualNP.Outside.L_x : True := by\n  bv_decide\n`), (e) => /bv_decide runs a SAT solver as the file builds, so use tactics the kernel checks alone, e\.g\. decide \(small sizes\), simp, omega, rfl$/.test(e.message));
+});
+// More than one file: the refusal carries the fixed sentence the contributor can act on (red team, 2026-11-24: a repeated honest mistake).
+test('more than one file: the refusal says to send each step as its own pull request', () => {
+  const sha = 'a'.repeat(40), blob = 'b'.repeat(40);
+  const two = [{ filename: RF(3), status: 'added', sha: blob }, { filename: RF(4), status: 'added', sha: blob }];
+  const pr = n => ({ state: 'open', base: { repo: { full_name: 'o/r' }, ref: 'main' }, head: { sha }, user: { login: 'someone' }, changed_files: n });
+  const SAY = /one file per pull request, so send each step as its own pull request/;
+  assert.throws(() => checkPrR(pr(2), two, { tree: [] }, 'o/r', 'main'), SAY);
+  assert.throws(() => checkPrR(pr(7), two, { tree: [] }, 'o/r', 'main'), /changes 7 files; one file per pull request, so/);
+  // the count says one, the list says two: still the sentence
+  assert.throws(() => checkPrR(pr(1), two, { tree: [] }, 'o/r', 'main'), SAY);
+  // no file is not "more than one": the old text, no sentence
+  assert.throws(() => checkPrR(pr(0), [], { tree: [] }, 'o/r', 'main'), e => /must add exactly one/.test(e.message) && !SAY.test(e.message));
+});

@@ -24,6 +24,24 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1 ($2)" >&2; exit 
 field() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])); 
 for k in sys.argv[2].split("."): v=v.get(k) if isinstance(v,dict) else None
 print("" if v is None else v)' "$STATE/$1.json" "$2"; }
+# IS THE STEP STILL OPEN? Asked of the desk before building and again right before the pull request, so
+# nobody spends compute on a step that was proved or taken meanwhile. One GET, no lease, nothing sent but
+# the step id. open and leased (your own lease) go on; anything else stops with the desk's one line.
+# If the desk cannot be reached the script goes on: this check is a courtesy, never a gate.
+still_open() {
+  ans="$(curl --proto '=https' -fsS -m 10 -G "$DESK/step" --data-urlencode "gap=$1" 2>/dev/null)" || return 0
+  printf '%s' "$ans" | python3 -c 'import json,sys,re
+try: d=json.load(sys.stdin)
+except Exception: sys.exit(0)
+st=d.get("state") if isinstance(d,dict) else None
+if st in ("open","leased") or not isinstance(st,str): sys.exit(0)
+say=re.sub(r"[^ -~]", " ", str(d.get("say") or ""))[:200]
+print("stopped: this step is no longer open (" + re.sub(r"[^a-z_]", "", st)[:20] + "). " + say, file=sys.stderr)
+print("next: tools/pnp.sh next", file=sys.stderr)
+sys.exit(3)'
+  [ $? -eq 3 ] && exit 3
+  return 0
+}
 have() { [ -f "$STATE/$1.json" ] || { echo "no such step here: $1 (run: tools/pnp.sh next)" >&2; exit 1; }; }
 
 case "${1:-help}" in
@@ -70,10 +88,11 @@ beat)
   have "$2"; curl -fsS -X POST "$DESK/beat?lease=$(field "$2" lease.id)" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("lease until", d["lease"]["expires_at"])'
   ;;
 check)
-  have "$2"; (cd "$ROOT/lean" && lake build "$(field "$2" gap.module)") && echo "it builds. The pull request is checked again by the project's own checker, which is stricter: see the FORMAT RULES in join.txt."
+  have "$2"; still_open "$2"; (cd "$ROOT/lean" && lake build "$(field "$2" gap.module)") && echo "it builds. The pull request is checked again by the project's own checker, which is stricter: see the FORMAT RULES in join.txt."
   ;;
 submit)
   have "$2"; id="$2"; file="$(field "$id" gap.file)"
+  still_open "$id"
   grep -q 'sorry' "$ROOT/$file" && { echo "$file still contains sorry" >&2; exit 1; }
   cd "$ROOT"
   other="$(git status --porcelain | grep -v " $file\$" | grep -v '^?? \.pnp/' || true)"
@@ -83,6 +102,7 @@ submit)
   git push -q -u origin "$id"
   body=""; [ -n "${PNP_X:-}" ] && body="**X handle**: ${PNP_X}"$'\n'
   [ -n "${PNP_LINKEDIN:-}" ] && body="${body}**LinkedIn profile**: ${PNP_LINKEDIN}"$'\n'
+  still_open "$id"
   gh pr create --repo "$UPSTREAM" --title "$id" --body "$body"
   curl -fsS -X POST "$DESK/release?lease=$(field "$id" lease.id)&reason=submitted" >/dev/null && echo "submitted; the verdict comes as a comment on the pull request. Next: git checkout main && tools/pnp.sh next"
   ;;

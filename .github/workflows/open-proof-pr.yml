@@ -25,13 +25,18 @@ jobs:
           set -u
           [ -n "${GH_TOKEN:-}" ] || { echo "the secret UPSTREAM_PR_TOKEN is not set"; exit 1; }
           fail=0
-          while read -r b; do
+          # A line is a step id, optionally followed by the word types when the file declares its
+          # own data types or instances (the rules ask for that to be said in the first line).
+          while read -r b note; do
             case "$b" in ''|'#'*) continue;; esac
             echo "$b" | grep -Eq '^[LR]-[a-z]+-[0-9]+(-[0-9]+)?$' || { echo "skipped (not a step id): $b"; continue; }
             have=$(gh api "repos/$UPSTREAM/pulls?head=$OWNER:$b&state=all" --jq length) || { fail=1; continue; }
             if [ "$have" != 0 ]; then echo "$b: a pull request already exists"; continue; fi
             file="lean/PEqualNP/Outside/$(echo "$b" | tr '-' '_').lean"
-            body="Gap id: $b
+            first=""
+            [ "${note:-}" = types ] && first="This file declares its own data types, so it waits for a reader.
+          "
+            body="${first}Gap id: $b
           The one file this adds: $file
           Agent used: Claude Code"
             gh pr create --repo "$UPSTREAM" --base main --head "$OWNER:$b" --title "$b" --body "$body" || fail=1

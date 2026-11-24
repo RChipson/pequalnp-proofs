@@ -1,78 +1,80 @@
 import Mathlib
 import PEqualNP.Defs
 
--- Run the first circuit, then the second on all of its wires, then one OR gate of the
--- two outputs: 44 + 18 + 1 gates.
-namespace PEqualNP.Outside.L_meta_4091
 open PEqualNP.CircuitLowerBounds
 
-def W (gs : List Gate) (x : List Bool) : List Bool :=
-  gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) x
+namespace PEqualNP.Outside.L_meta_4091
 
-lemma W_snoc (gs : List Gate) (g : Gate) (x : List Bool) :
-    W (gs ++ [g]) x = W gs x ++ [g.op.eval (g.inputs.map fun i => (W gs x).getD i false)] := by
-  simp [W, List.foldl_append]
+def step (w : List Bool) (g : Gate) : List Bool :=
+  w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
 
-lemma W_length (gs : List Gate) (x : List Bool) : (W gs x).length = x.length + gs.length := by
-  induction gs using List.reverseRecOn with
-  | nil => simp [W]
-  | append_singleton gs g ih => rw [W_snoc]; simp [ih]; omega
+def run (gs : List Gate) (x : List Bool) : List Bool := gs.foldl step x
 
-lemma getD_snoc (l : List Bool) (v : Bool) (i : Nat) :
-    (l ++ [v]).getD i false =
-      if i < l.length then l.getD i false else if i = l.length then v else false := by
-  split_ifs with h1 h2
-  · exact List.getD_append _ _ _ _ h1
-  · subst h2
-    rw [List.getD_append_right _ _ _ _ (le_refl _)]
-    simp
-  · rw [List.getD_eq_default]
-    simp
-    omega
+lemma run_nil (x : List Bool) : run [] x = x := rfl
 
-lemma W_input (gs : List Gate) (x : List Bool) (i : Nat) (hi : i < x.length) :
-    (W gs x).getD i false = x.getD i false := by
-  induction gs using List.reverseRecOn with
-  | nil => simp [W]
-  | append_singleton gs g ih =>
-    rw [W_snoc, getD_snoc, W_length, if_pos (by omega)]
-    exact ih
+lemma run_cons (g : Gate) (gs : List Gate) (x : List Bool) :
+    run (g :: gs) x = run gs (step x g) := rfl
+
+lemma run_append (l1 l2 : List Gate) (x : List Bool) :
+    run (l1 ++ l2) x = run l2 (run l1 x) := by
+  simp [run, List.foldl_append]
+
+lemma step_length (w : List Bool) (g : Gate) : (step w g).length = w.length + 1 := by
+  simp [step]
+
+lemma run_length (gs : List Gate) (x : List Bool) :
+    (run gs x).length = x.length + gs.length := by
+  induction gs generalizing x with
+  | nil => simp [run]
+  | cons g gs ih => rw [run_cons, ih, step_length]; simp; omega
+
+lemma step_getD (w : List Bool) (g : Gate) (i : ℕ) (hi : i < w.length) :
+    (step w g).getD i false = w.getD i false := by
+  simp only [step]
+  exact List.getD_append _ _ _ _ hi
+
+lemma step_getD_last (w : List Bool) (g : Gate) :
+    (step w g).getD w.length false = g.op.eval (g.inputs.map fun i => w.getD i false) := by
+  simp only [step]
+  rw [List.getD_append_right _ _ _ _ (le_refl _)]
+  simp
+
+lemma run_getD (gs : List Gate) (x : List Bool) (i : ℕ) (hi : i < x.length) :
+    (run gs x).getD i false = x.getD i false := by
+  induction gs generalizing x with
+  | nil => rfl
+  | cons g gs ih => rw [run_cons, ih _ (by rw [step_length]; omega), step_getD _ _ _ hi]
 
 end PEqualNP.Outside.L_meta_4091
 
-open PEqualNP.Outside.L_meta_4091 PEqualNP.CircuitLowerBounds in
 theorem PEqualNP.Outside.L_meta_4091 : ∀ (x1 x2 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x1 → x1.size = (44 : ℕ) → x1.output < (70 : ℕ) → PEqualNP.MetaComplexity.Monotone2 x2 → x2.size ≤ (18 : ℕ) → ∃ (x8 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x8 ∧ x8.size ≤ (63 : ℕ) ∧ ∀ (x9 : List Bool), x9.length = (26 : ℕ) → x8.eval x9 = (x1.eval x9 || x2.eval (x1.wires x9)) := by
-  intro C1 C2 h1 hs1 ho1 h2 hs2
-  have l1 : C1.gates.length = 44 := hs1
-  have l2 : C2.gates.length ≤ 18 := hs2
-  refine ⟨⟨C1.gates ++ C2.gates ++ [(⟨GateOp.or, [C1.output, C2.output]⟩ : Gate)],
-    70 + C2.gates.length⟩, ?_, ?_, ?_⟩
+  intro x1 x2 h1 hs1 ho1 h2 hs2
+  have hl1 : x1.gates.length = 44 := hs1
+  refine ⟨⟨x1.gates ++ x2.gates ++ [⟨GateOp.or, [x1.output, x2.output]⟩], 26 + 44 + x2.gates.length⟩,
+    ?_, ?_, ?_⟩
   · intro g hg
     simp only [List.mem_append, List.mem_singleton] at hg
     rcases hg with (hg | hg) | rfl
     · exact h1 g hg
     · exact h2 g hg
     · exact ⟨by simp, by simp⟩
-  · show (C1.gates ++ C2.gates ++ [(⟨GateOp.or, [C1.output, C2.output]⟩ : Gate)]).length ≤ 63
+  · change (x1.gates ++ x2.gates ++ [_]).length ≤ 63
+    have : x2.gates.length ≤ 18 := hs2
     simp only [List.length_append, List.length_singleton]
     omega
-  · intro x hx
-    have e : W (C1.gates ++ C2.gates ++ [(⟨GateOp.or, [C1.output, C2.output]⟩ : Gate)]) x =
-        W C2.gates (W C1.gates x) ++ [GateOp.or.eval
-          [(W C2.gates (W C1.gates x)).getD C1.output false,
-            (W C2.gates (W C1.gates x)).getD C2.output false]] := by
-      rw [W_snoc]
-      have : W (C1.gates ++ C2.gates) x = W C2.gates (W C1.gates x) := by
-        unfold W
-        rw [List.foldl_append]
-      rw [this]
-      rfl
-    show (W (C1.gates ++ C2.gates ++ [(⟨GateOp.or, [C1.output, C2.output]⟩ : Gate)]) x).getD
-      (70 + C2.gates.length) false = _
-    rw [e, getD_snoc, W_length, W_length, hx, l1, if_neg (by omega), if_pos (by omega)]
-    have p : (W C2.gates (W C1.gates x)).getD C1.output false =
-        (W C1.gates x).getD C1.output false :=
-      W_input _ _ _ (by rw [W_length, hx, l1]; omega)
-    rw [p]
-    show GateOp.or.eval [C1.eval x, C2.eval (C1.wires x)] = _
-    cases C1.eval x <;> cases C2.eval (C1.wires x) <;> rfl
+  · intro x9 hx9
+    change (PEqualNP.Outside.L_meta_4091.run (x1.gates ++ x2.gates ++ [⟨GateOp.or, [x1.output, x2.output]⟩]) x9).getD
+        (26 + 44 + x2.gates.length) false =
+      ((PEqualNP.Outside.L_meta_4091.run x1.gates x9).getD x1.output false ||
+        (PEqualNP.Outside.L_meta_4091.run x2.gates (PEqualNP.Outside.L_meta_4091.run x1.gates x9)).getD x2.output false)
+    rw [PEqualNP.Outside.L_meta_4091.run_append, PEqualNP.Outside.L_meta_4091.run_append]
+    have hW : (PEqualNP.Outside.L_meta_4091.run x2.gates (PEqualNP.Outside.L_meta_4091.run x1.gates x9)).length =
+        26 + 44 + x2.gates.length := by
+      rw [PEqualNP.Outside.L_meta_4091.run_length, PEqualNP.Outside.L_meta_4091.run_length, hx9, hl1]
+    rw [show PEqualNP.Outside.L_meta_4091.run [(⟨GateOp.or, [x1.output, x2.output]⟩ : Gate)]
+        (PEqualNP.Outside.L_meta_4091.run x2.gates (PEqualNP.Outside.L_meta_4091.run x1.gates x9)) =
+        PEqualNP.Outside.L_meta_4091.step (PEqualNP.Outside.L_meta_4091.run x2.gates (PEqualNP.Outside.L_meta_4091.run x1.gates x9))
+          ⟨GateOp.or, [x1.output, x2.output]⟩ from rfl, ← hW, PEqualNP.Outside.L_meta_4091.step_getD_last]
+    simp only [GateOp.eval, List.map_cons, List.map_nil, List.any_cons, List.any_nil, id_eq,
+      Bool.or_false]
+    rw [PEqualNP.Outside.L_meta_4091.run_getD x2.gates _ x1.output (by rw [PEqualNP.Outside.L_meta_4091.run_length, hx9, hl1]; omega)]

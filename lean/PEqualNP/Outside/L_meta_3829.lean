@@ -11,10 +11,8 @@ import Mathlib.Tactic.Push
 import Mathlib.Tactic.Tauto
 import PEqualNP.Defs
 
--- The finite certificate (the parts Base1007 and Main1672) is the one of the checked
--- L-meta-1672 by jmwalsh96 (PR 4290, with its base from L-meta-1007), as carried in
--- the checked L-meta-2529. Its lemmas for the first gate of that step are left out.
--- The part Glue at the end is new and derives this statement.
+-- Certificate and supporting proofs from open-goat/pequalnp-proofs, L_meta_2012,
+-- commit aa45471536065d9aa73df9a7abb90dedebf7f37d.
 namespace PEqualNP.Outside.L_meta_3829
 namespace Base1007
 abbrev B:=BitVec 252
@@ -626,33 +624,15 @@ lemma q0k {cap : Nat}
 set_option maxHeartbeats 0 in lemma q3h :
     qh 0 0=true/\qh 1 0=true/\qh 2 0=true ∧
     qh 3 0=true/\qh 4 0=true/\qh 5 0=true:= by decide +kernel
-set_option maxHeartbeats 0 in lemma z6 : span (qh 6) 19 0=true:= by
-  iterate 2 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3s : span (qh 7) 100 0=true:= by
-  iterate 12 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3r : span (qh 7) 100 100=true:= by
-  iterate 12 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3q : span (qh 7) 92 200=true:= by
-  iterate 11 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3p : span (qh 8) 100 0=true:= by
-  iterate 12 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3o : span (qh 8) 100 100=true:= by
-  iterate 12 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3n : span (qh 8) 100 200=true:= by
-  iterate 12 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3m : span (qh 8) 65 300=true:= by
-  iterate 8 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxHeartbeats 0 in lemma z9 : span (qh 9) 26 0=true:= by
-  iterate 3 refine @span_join _ _ _ 8 ?_ (by decide +kernel)
-  decide +kernel
+set_option maxHeartbeats 0 in lemma z6 : span (qh 6) 19 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3s : span (qh 7) 100 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3r : span (qh 7) 100 100=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3q : span (qh 7) 92 200=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3p : span (qh 8) 100 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3o : span (qh 8) 100 100=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3n : span (qh 8) 100 200=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3m : span (qh 8) 65 300=true:= by decide +kernel
+set_option maxHeartbeats 0 in lemma z9 : span (qh 9) 26 0=true:= by decide +kernel
 set_option maxHeartbeats 0 in lemma q3z : span (qh 10) 1 0=true:= by decide +kernel
 lemma z7 : span (qh 7) 292 0=true:=(@span_join (qh 7) 100 0 192 q3s (@span_join (qh 7) 100 100 92 q3r q3q))
 lemma z8 : span (qh 8) 365 0=true:=(@span_join (qh 8) 200 0 165 (@span_join (qh 8) 100 0 100 q3p q3o) (@span_join (qh 8) 100 200 65 q3n q3m))
@@ -2669,31 +2649,15 @@ lemma sk {k t i : Nat} (ht : t ≤ 5)
   apply xv (ve h.1) _ _ h.2
   · intro w hw; exact rk (hp (t - 1) (by omega)) (by simpa using hw)
   · intro w hw; exact rk (hp t ht) (by simpa using hw)
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3c : Theta.span (rb 8 0) 250 0=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2v : Theta.span (rb 8 0) 250 250=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2u : Theta.span (rb 8 0) 250 500=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2t : Theta.span (rb 8 0) 250 750=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q1q : Theta.span (rb 8 0) 250 1000=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q1p : Theta.span (rb 8 0) 93 1250=true:= by
-  iterate 7 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3c : Theta.span (rb 8 0) 250 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2v : Theta.span (rb 8 0) 250 250=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2u : Theta.span (rb 8 0) 250 500=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2t : Theta.span (rb 8 0) 250 750=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q1q : Theta.span (rb 8 0) 250 1000=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q1p : Theta.span (rb 8 0) 93 1250=true:= by decide +kernel
 lemma q2r : Theta.span (rb 8 0) 1343 0=true:=(@Theta.span_join (rb 8 0) 750 0 593 (@Theta.span_join (rb 8 0) 250 0 500 q3c (@Theta.span_join (rb 8 0) 250 250 250 q2v q2u)) (@Theta.span_join (rb 8 0) 250 750 343 q2t (@Theta.span_join (rb 8 0) 250 1000 93 q1q q1p)))
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3b : Theta.span (rb 8 1) 250 0=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2s : Theta.span (rb 8 1) 99 250=true:= by
-  iterate 8 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3b : Theta.span (rb 8 1) 250 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2s : Theta.span (rb 8 1) 99 250=true:= by decide +kernel
 lemma q2q : Theta.span (rb 8 1) 349 0=true:=(@Theta.span_join (rb 8 1) 250 0 99 q3b q2s)
 set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2p : Theta.span (rb 8 2) 6 0=true:= by decide +kernel
 lemma q2o : Theta.span (rb 8 3) 0 0=true:=rfl
@@ -2709,26 +2673,14 @@ lemma q1r (t : Nat) (ht : t ≤ 5) (i : Nat) (hi : i<qk 8 t) : rb 8 t i=true:= b
   · exact Theta.span_ok q2m i (Nat.zero_le i) hi
 lemma zt (t : Nat) (ht : t ≤ 5) (i : Nat) (hi : i<qk 8 t) : qs 8 t (q8 8 t i) :=
   ya (q1r t ht i hi)
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3a : Theta.span (q4 8 0) 250 0=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2l : Theta.span (q4 8 0) 250 250=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2k : Theta.span (q4 8 0) 102 500=true:= by
-  iterate 8 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q3a : Theta.span (q4 8 0) 250 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2l : Theta.span (q4 8 0) 250 250=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2k : Theta.span (q4 8 0) 102 500=true:= by decide +kernel
 lemma q2i : Theta.span (q4 8 0) 602 0=true:=(@Theta.span_join (q4 8 0) 250 0 352 q3a (@Theta.span_join (q4 8 0) 250 250 102 q2l q2k))
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q39 : Theta.span (q4 8 1) 250 0=true:= by
-  iterate 20 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2j : Theta.span (q4 8 1) 128 250=true:= by
-  iterate 10 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q39 : Theta.span (q4 8 1) 250 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2j : Theta.span (q4 8 1) 128 250=true:= by decide +kernel
 lemma q2h : Theta.span (q4 8 1) 378 0=true:=(@Theta.span_join (q4 8 1) 250 0 128 q39 q2j)
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2g : Theta.span (q4 8 2) 41 0=true:= by
-  iterate 3 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q2g : Theta.span (q4 8 2) 41 0=true:= by decide +kernel
 lemma q2f : Theta.span (q4 8 3) 0 0=true:=rfl
 lemma q2e : Theta.span (q4 8 4) 0 0=true:=rfl
 lemma q2d : Theta.span (q4 8 5) 0 0=true:=rfl
@@ -2742,15 +2694,9 @@ lemma q1o (t : Nat) (ht : t ≤ 5) (i : Nat) (hi : i<qk 9 t) : q4 8 t i=true:= b
   · exact Theta.span_ok q2d i (Nat.zero_le i) hi
 lemma zr (t : Nat) (ht : t ≤ 5) (i : Nat) (hi : i<qk 9 t) : qs 9 t (q8 9 t i) :=
   sk ht zt (q1o t ht i hi)
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q23 : Theta.span (q4 9 0) 64 0=true:= by
-  iterate 5 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q22 : Theta.span (q4 9 1) 84 0=true:= by
-  iterate 6 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
-set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q21 : Theta.span (q4 9 2) 43 0=true:= by
-  iterate 3 refine @Theta.span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q23 : Theta.span (q4 9 0) 64 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q22 : Theta.span (q4 9 1) 84 0=true:= by decide +kernel
+set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q21 : Theta.span (q4 9 2) 43 0=true:= by decide +kernel
 set_option maxRecDepth 20000 in set_option maxHeartbeats 0 in lemma q20 : Theta.span (q4 9 3) 8 0=true:= by decide +kernel
 lemma q1z : Theta.span (q4 9 4) 0 0=true:=rfl
 lemma q1y : Theta.span (q4 9 5) 0 0=true:=rfl
@@ -4752,6 +4698,21 @@ lemma rootTag_ok {k : Nat} (hk : k ≤ 14) : TagOk k raw.toFinset rootTag := by
   · exact checkV 6 rfl
   · exact checkV 7 rfl
   · exact checkV 8 rfl
+lemma circuit_trestricted (C : Circuit) (hc : C.size ≤ 14)
+    (hf : PEqualNP.MetaComplexity.FanInTwo C)
+    (he : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x) = edgeF x) :
+    ∃ k ≤ 14, ∃ t ≤ 6, TRestricted k t raw.toFinset rootTag := by
+  have htgt : target ∈ execute C.gates raw := circuit_target C hf he
+  obtain ⟨k, t, S, hk, hlive, hsub⟩ := extract C.gates raw raw_valid hf htgt
+  have hk14 : k ≤ 14 := hk.trans hc
+  have hsubRaw : ∀ a ∈ S, a ∈ raw := by
+    intro a ha; exact hsub a ha
+  have heq := necessary hlive hsubRaw
+  subst S
+  have sz := live_size hlive
+  rw [List.toFinset_card_of_nodup raw_nd] at sz
+  have hlenRaw : raw.length = 9 := rfl
+  exact ⟨k, hk14, t, by omega, restrict_live hlive (rootTag_ok hk14)⟩
 def sigsOf (v : List Wire) : List Sig := v.map Prod.fst
 def Represents (v : List Wire) (S : Finset Sig) (τ : Sig → Tag) : Prop :=
   (sigsOf v).Nodup ∧ (sigsOf v).toFinset = S ∧ ∀ w ∈ v, w.2 = τ w.1
@@ -6747,9 +6708,7 @@ lemma span_ok {p : Nat → Bool} {n i : Nat} (h : span p n i = true) :
     · exact ih h.2 j (by omega) (by omega)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f9_0_0 : span (stateOk 9 0) 15 0 = true := by
-  iterate 1 refine @span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+theorem f9_0_0 : span (stateOk 9 0) 15 0 = true := by decide +kernel
 theorem f9_all_0 : span (stateOk 9 0) 15 0 = true := f9_0_0
 theorem f9_all_1 : span (stateOk 9 1) 0 0 = true := rfl
 theorem f9_all_2 : span (stateOk 9 2) 0 0 = true := rfl
@@ -6776,9 +6735,47 @@ lemma f9Impossible (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < frontierCount 9 
   simpa [stateOk, hlt] using leaf_impossible (by simpa [stateOk, hlt] using h)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f10_all_0 : span (stateOk 10 0) 341 0 = true := by
-  iterate 28 refine @span_join _ _ _ 12 ?_ (by decide +kernel)
-  decide +kernel
+theorem f10_0_0 : span (stateOk 10 0) 25 0 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_25 : span (stateOk 10 0) 25 25 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_50 : span (stateOk 10 0) 25 50 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_75 : span (stateOk 10 0) 25 75 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_100 : span (stateOk 10 0) 25 100 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_125 : span (stateOk 10 0) 25 125 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_150 : span (stateOk 10 0) 25 150 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_175 : span (stateOk 10 0) 25 175 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_200 : span (stateOk 10 0) 25 200 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_225 : span (stateOk 10 0) 25 225 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_250 : span (stateOk 10 0) 25 250 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_275 : span (stateOk 10 0) 25 275 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_300 : span (stateOk 10 0) 25 300 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem f10_0_325 : span (stateOk 10 0) 16 325 = true := by decide +kernel
+theorem f10_all_0 : span (stateOk 10 0) 341 0 = true := (@span_join (stateOk 10 0) 175 0 166 (@span_join (stateOk 10 0) 75 0 100 (@span_join (stateOk 10 0) 25 0 50 f10_0_0 (@span_join (stateOk 10 0) 25 25 25 f10_0_25 f10_0_50)) (@span_join (stateOk 10 0) 50 75 50 (@span_join (stateOk 10 0) 25 75 25 f10_0_75 f10_0_100) (@span_join (stateOk 10 0) 25 125 25 f10_0_125 f10_0_150))) (@span_join (stateOk 10 0) 75 175 91 (@span_join (stateOk 10 0) 25 175 50 f10_0_175 (@span_join (stateOk 10 0) 25 200 25 f10_0_200 f10_0_225)) (@span_join (stateOk 10 0) 50 250 41 (@span_join (stateOk 10 0) 25 250 25 f10_0_250 f10_0_275) (@span_join (stateOk 10 0) 25 300 16 f10_0_300 f10_0_325))))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem f10_1_0 : span (stateOk 10 1) 12 0 = true := by decide +kernel
@@ -6802,137 +6799,85 @@ lemma f10Impossible (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < frontierCount 1
   level_impossible f9Impossible (f10Checked) t ht i hi
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_0 : span (stateOk 11 0) 25 0 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_0 : span (stateOk 11 0) 25 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_25 : span (stateOk 11 0) 25 25 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_25 : span (stateOk 11 0) 25 25 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_50 : span (stateOk 11 0) 25 50 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_50 : span (stateOk 11 0) 25 50 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_75 : span (stateOk 11 0) 25 75 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_75 : span (stateOk 11 0) 25 75 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_100 : span (stateOk 11 0) 25 100 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_100 : span (stateOk 11 0) 25 100 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_125 : span (stateOk 11 0) 25 125 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_125 : span (stateOk 11 0) 25 125 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_150 : span (stateOk 11 0) 25 150 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_150 : span (stateOk 11 0) 25 150 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_175 : span (stateOk 11 0) 25 175 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_175 : span (stateOk 11 0) 25 175 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_200 : span (stateOk 11 0) 25 200 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_200 : span (stateOk 11 0) 25 200 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_225 : span (stateOk 11 0) 25 225 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_225 : span (stateOk 11 0) 25 225 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_0_250 : span (stateOk 11 0) 3 250 = true := by
-  iterate 2 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_0_250 : span (stateOk 11 0) 3 250 = true := by decide +kernel
 theorem f11_all_0 : span (stateOk 11 0) 253 0 = true := (@span_join (stateOk 11 0) 125 0 128 (@span_join (stateOk 11 0) 50 0 75 (@span_join (stateOk 11 0) 25 0 25 f11_0_0 f11_0_25) (@span_join (stateOk 11 0) 25 50 50 f11_0_50 (@span_join (stateOk 11 0) 25 75 25 f11_0_75 f11_0_100))) (@span_join (stateOk 11 0) 75 125 53 (@span_join (stateOk 11 0) 25 125 50 f11_0_125 (@span_join (stateOk 11 0) 25 150 25 f11_0_150 f11_0_175)) (@span_join (stateOk 11 0) 25 200 28 f11_0_200 (@span_join (stateOk 11 0) 25 225 3 f11_0_225 f11_0_250))))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_0 : span (stateOk 11 1) 25 0 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_0 : span (stateOk 11 1) 25 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_25 : span (stateOk 11 1) 25 25 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_25 : span (stateOk 11 1) 25 25 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_50 : span (stateOk 11 1) 25 50 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_50 : span (stateOk 11 1) 25 50 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_75 : span (stateOk 11 1) 25 75 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_75 : span (stateOk 11 1) 25 75 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_100 : span (stateOk 11 1) 25 100 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_100 : span (stateOk 11 1) 25 100 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_125 : span (stateOk 11 1) 25 125 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_125 : span (stateOk 11 1) 25 125 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_150 : span (stateOk 11 1) 25 150 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_150 : span (stateOk 11 1) 25 150 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_175 : span (stateOk 11 1) 25 175 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_175 : span (stateOk 11 1) 25 175 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_200 : span (stateOk 11 1) 25 200 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_200 : span (stateOk 11 1) 25 200 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_1_225 : span (stateOk 11 1) 5 225 = true := by
-  iterate 4 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_1_225 : span (stateOk 11 1) 5 225 = true := by decide +kernel
 theorem f11_all_1 : span (stateOk 11 1) 230 0 = true := (@span_join (stateOk 11 1) 125 0 105 (@span_join (stateOk 11 1) 50 0 75 (@span_join (stateOk 11 1) 25 0 25 f11_1_0 f11_1_25) (@span_join (stateOk 11 1) 25 50 50 f11_1_50 (@span_join (stateOk 11 1) 25 75 25 f11_1_75 f11_1_100))) (@span_join (stateOk 11 1) 50 125 55 (@span_join (stateOk 11 1) 25 125 25 f11_1_125 f11_1_150) (@span_join (stateOk 11 1) 25 175 30 f11_1_175 (@span_join (stateOk 11 1) 25 200 5 f11_1_200 f11_1_225))))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_2_0 : span (stateOk 11 2) 25 0 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_2_0 : span (stateOk 11 2) 25 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_2_25 : span (stateOk 11 2) 25 25 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_2_25 : span (stateOk 11 2) 25 25 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_2_50 : span (stateOk 11 2) 25 50 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_2_50 : span (stateOk 11 2) 25 50 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_2_75 : span (stateOk 11 2) 6 75 = true := by
-  iterate 5 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_2_75 : span (stateOk 11 2) 6 75 = true := by decide +kernel
 theorem f11_all_2 : span (stateOk 11 2) 81 0 = true := (@span_join (stateOk 11 2) 50 0 31 (@span_join (stateOk 11 2) 25 0 25 f11_2_0 f11_2_25) (@span_join (stateOk 11 2) 25 50 6 f11_2_50 f11_2_75))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f11_3_0 : span (stateOk 11 3) 6 0 = true := by
-  iterate 5 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f11_3_0 : span (stateOk 11 3) 6 0 = true := by decide +kernel
 theorem f11_all_3 : span (stateOk 11 3) 6 0 = true := f11_3_0
 theorem f11_all_4 : span (stateOk 11 4) 0 0 = true := rfl
 theorem f11_all_5 : span (stateOk 11 5) 0 0 = true := rfl
@@ -6951,43 +6896,29 @@ lemma f11Impossible (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < frontierCount 1
   level_impossible f10Impossible (f11Checked) t ht i hi
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f12_0_0 : span (stateOk 12 0) 25 0 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f12_0_0 : span (stateOk 12 0) 25 0 = true := by decide +kernel
 theorem f12_all_0 : span (stateOk 12 0) 25 0 = true := f12_0_0
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f12_1_0 : span (stateOk 12 1) 25 0 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f12_1_0 : span (stateOk 12 1) 25 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f12_1_25 : span (stateOk 12 1) 9 25 = true := by
-  iterate 8 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f12_1_25 : span (stateOk 12 1) 9 25 = true := by decide +kernel
 theorem f12_all_1 : span (stateOk 12 1) 34 0 = true := (@span_join (stateOk 12 1) 25 0 9 f12_1_0 f12_1_25)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f12_2_0 : span (stateOk 12 2) 25 0 = true := by
-  iterate 24 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f12_2_0 : span (stateOk 12 2) 25 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f12_2_25 : span (stateOk 12 2) 9 25 = true := by
-  iterate 8 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f12_2_25 : span (stateOk 12 2) 9 25 = true := by decide +kernel
 theorem f12_all_2 : span (stateOk 12 2) 34 0 = true := (@span_join (stateOk 12 2) 25 0 9 f12_2_0 f12_2_25)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f12_3_0 : span (stateOk 12 3) 17 0 = true := by
-  iterate 16 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f12_3_0 : span (stateOk 12 3) 17 0 = true := by decide +kernel
 theorem f12_all_3 : span (stateOk 12 3) 17 0 = true := f12_3_0
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f12_4_0 : span (stateOk 12 4) 3 0 = true := by
-  iterate 2 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f12_4_0 : span (stateOk 12 4) 3 0 = true := by decide +kernel
 theorem f12_all_4 : span (stateOk 12 4) 3 0 = true := f12_4_0
 theorem f12_all_5 : span (stateOk 12 5) 0 0 = true := rfl
 theorem f12_all_6 : span (stateOk 12 6) 0 0 = true := rfl
@@ -7005,33 +6936,23 @@ lemma f12Impossible (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < frontierCount 1
   level_impossible f11Impossible (f12Checked) t ht i hi
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f13_0_0 : span (stateOk 13 0) 3 0 = true := by
-  iterate 2 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f13_0_0 : span (stateOk 13 0) 3 0 = true := by decide +kernel
 theorem f13_all_0 : span (stateOk 13 0) 3 0 = true := f13_0_0
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f13_1_0 : span (stateOk 13 1) 4 0 = true := by
-  iterate 3 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f13_1_0 : span (stateOk 13 1) 4 0 = true := by decide +kernel
 theorem f13_all_1 : span (stateOk 13 1) 4 0 = true := f13_1_0
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f13_2_0 : span (stateOk 13 2) 4 0 = true := by
-  iterate 3 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f13_2_0 : span (stateOk 13 2) 4 0 = true := by decide +kernel
 theorem f13_all_2 : span (stateOk 13 2) 4 0 = true := f13_2_0
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f13_3_0 : span (stateOk 13 3) 4 0 = true := by
-  iterate 3 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f13_3_0 : span (stateOk 13 3) 4 0 = true := by decide +kernel
 theorem f13_all_3 : span (stateOk 13 3) 4 0 = true := f13_3_0
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem f13_4_0 : span (stateOk 13 4) 4 0 = true := by
-  iterate 3 refine @span_join _ _ _ 1 ?_ (by decide +kernel)
-  decide +kernel
+theorem f13_4_0 : span (stateOk 13 4) 4 0 = true := by decide +kernel
 theorem f13_all_4 : span (stateOk 13 4) 4 0 = true := f13_4_0
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
@@ -7094,37 +7015,11 @@ lemma rootWires_rep : Represents rootWires raw.toFinset rootTag := by
 end Main1672
 end PEqualNP.Outside.L_meta_3829
 
--- New for this step: nothing but the restatement. A circuit on the nine inputs gives a
--- derivation that reads only inputs, which the checked frontier certificate for fourteen
--- gates excludes.
-namespace PEqualNP.Outside.L_meta_3829
-namespace Glue
-open PEqualNP.CircuitLowerBounds Main1672
-
-lemma core (C : Circuit) (hf : PEqualNP.MetaComplexity.FanInTwo C) (hle : C.gates.length ≤ 14)
-    (he : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x) = edgeF x) : False := by
-  have htgt : target ∈ execute C.gates raw := circuit_target C hf he
-  obtain ⟨k, t, S, hk, hlive, hsub⟩ :=
-    extract C.gates raw raw_valid (fun g hg => hf g hg) htgt
-  have heq := necessary hlive hsub
-  subst S
-  have sz := live_size hlive
-  rw [List.toFinset_card_of_nodup raw_nd] at sz
-  have hlenRaw : raw.length = 9 := rfl
-  exact rootImpossible t (by omega) k (hk.trans hle) raw.toFinset rootTag rootWires_rep
-    (restrict_live hlive (rootTag_ok (hk.trans hle)))
-
-end Glue
-end PEqualNP.Outside.L_meta_3829
-
+open PEqualNP.Outside.L_meta_3829.Main1672 in
 theorem PEqualNP.Outside.L_meta_3829 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x1 → x1.size ≤ (14 : ℕ) → ∃ (x4 : Fin (9 : ℕ) → Bool), PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 x4 ≠ (x4 (0 : Fin (9 : ℕ)) && x4 (1 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (2 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (3 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (4 : Fin (9 : ℕ)) || x4 (4 : Fin (9 : ℕ)) && x4 (0 : Fin (9 : ℕ)) || x4 (0 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (6 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (5 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (6 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (8 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ))) := by
   intro C hf hs
-  by_contra hne
-  push Not at hne
-  refine PEqualNP.Outside.L_meta_3829.Glue.core C hf hs (fun x => ?_)
-  have h := hne x
-  have target_eq : (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 ||
-      x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 ||
-      x 8 && x 5) = PEqualNP.Outside.L_meta_3829.Main1672.edgeF x := rfl
-  rw [← target_eq]
-  exact h
+  by_contra h
+  push_neg at h
+  have he : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x) = edgeF x := fun x => h x
+  obtain ⟨k, hk, t, ht, hr⟩ := circuit_trestricted C hs hf he
+  exact rootImpossible t ht k hk raw.toFinset rootTag rootWires_rep hr
