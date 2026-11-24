@@ -1,34 +1,73 @@
 #!/bin/bash
-# Usage: generator/submit.sh <number> <proof file> <statement file> <commit subject>
-# Copies the proof into the Lean tree, runs the project's file-rule guard against the live
-# step list, commits it on its own branch off upstream/main, and pushes that branch
-# together with the request line that makes the workflow open the pull request.
-# Then starts the project's checker locally in the background.
+# Usage: generator/submit.sh <step id, e.g. L-meta-5006 or R-meta-5006-1> <proof file>
+# Sends one proof (or reduction) exactly as https://pequalnp.com/join.txt asks:
+#   - only for a step we hold a live lease on (.pnp/<step>.json, written by generator/desk.py);
+#   - the lease is renewed once first, and nothing is sent if the desk answers 410;
+#   - the project's own file-rule guard is run against the live step list;
+#   - one branch named after the step, ONE unsigned commit whose message is the step id,
+#     one file, made off upstream/main with the numbered no-reply address;
+#   - the request line (with the word types when the file declares its own data types or
+#     instances) makes the fork's workflow open the pull request;
+#   - once the desk shows the pull request, the lease is released with reason submitted
+#     (reason reduced for a reduction).
+# Set NOCHECK=1 to skip the local run of the project's checker afterwards.
 set -e
-N=$1; SRC=$2; ST=$3; MSG=$4
+ID=$1; SRC=$2
 S=${SCRATCH:-/tmp/claude-0/-home-user-pequalnp-proofs/740307a3-5578-556b-b545-0397351cd4f4/scratchpad}
 cd /home/user/pequalnp-proofs
-F=lean/PEqualNP/Outside/L_meta_$N.lean
-mkdir -p $S/g$N
+case "$ID" in
+  L-*) STEP=$ID;;
+  R-*) STEP=L-$(echo "$ID" | cut -d- -f2-3);;
+  *) echo "not a step id: $ID"; exit 1;;
+esac
+[ -f .pnp/$STEP.json ] || { echo "no live lease on $STEP: nothing is sent"; exit 1; }
+F=lean/PEqualNP/Outside/$(echo "$ID" | tr '-' '_').lean
+W=$S/send-$ID; mkdir -p $W
 if grep -q '"' "$SRC"; then echo "double quote in file"; exit 1; fi
+[ "$(wc -c < "$SRC")" -le 524288 ] || { echo "file larger than 512 KiB"; exit 1; }
+
+# renew once before sending; a 410 means the step is settled or withdrawn
+LEASE=$(python3 -c "import json;print(json.load(open('.pnp/$STEP.json'))['lease']['id'])")
+CODE=$(curl -sS -m 30 -o $W/beat.json -w '%{http_code}' -X POST "https://pequalnp.com/desk/beat?lease=$LEASE")
+[ "$CODE" = 200 ] || { echo "the desk answered $CODE to the renewal: not sending"; exit 1; }
+
+git fetch -q upstream main
 cp "$SRC" $F
-curl -s https://data.pequalnp.com/data/desk/gaps.json -o $S/g$N/gaps.json
-node .github/scripts/outside-guard.mjs gap $S/g$N/gaps.json L-meta-$N $F $S/g$N check | tail -1
-node .github/scripts/outside-guard.mjs imports $F $S/g$N/imports.json $F check | tail -1
-cmp $S/g$N/statement.txt "$ST"
+curl -s https://data.pequalnp.com/data/desk/gaps.json -o $W/gaps.json
+if [ "${ID#L-}" != "$ID" ]; then
+  node .github/scripts/outside-guard.mjs gap $W/gaps.json $ID $F $W check | tail -1
+  node .github/scripts/outside-guard.mjs imports $F $W/imports.json $F check | tail -1
+  python3 -c "import json;open('$W/lease-statement.txt','w').write(json.load(open('.pnp/$STEP.json'))['gap']['statement'])"
+  cmp $W/statement.txt $W/lease-statement.txt
+fi
+NOTE=""
+if grep -Eq '^[[:space:]]*(private |protected )?(inductive|structure|instance|class)[[:space:]]' "$SRC"; then NOTE=" types"; fi
+
 TRAILER=$'Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01TpFXUkpyLFra3HXQJVTCWi'
-rm -rf $S/wt$N; git worktree prune
-git worktree add -q -b L-meta-$N $S/wt$N upstream/main
-cp $F $S/wt$N/$F
-# The project's landing program only merges a head that is ONE unsigned commit with a one-line
-# plain message (no links, no tool names) and the numbered no-reply address, so the proof
-# commit is made in exactly that shape.
-(cd $S/wt$N && git add $F && git -c commit.gpgsign=false -c user.name=RChipson \
-  -c user.email=213504381+RChipson@users.noreply.github.com commit -q -m "L-meta-$N")
-echo L-meta-$N >> generator/pr-requests.txt
+rm -rf $W/wt; git worktree prune; git branch -D $ID 2>/dev/null || true
+git worktree add -q -b $ID $W/wt upstream/main
+cp $F $W/wt/$F
+(cd $W/wt && git add $F && git -c commit.gpgsign=false -c user.name=RChipson \
+  -c user.email=213504381+RChipson@users.noreply.github.com commit -q -m "$ID")
+rm -f $F
+echo "$ID$NOTE" >> generator/pr-requests.txt
 git add generator/pr-requests.txt
-git commit -q -m "Request a pull request for L-meta-$N" -m "$TRAILER"
-git push -q origin L-meta-$N claude/optimistic-ride-tshloe 2>&1 | grep -v '^remote:' || true
-git -C $S/wt$N rev-parse HEAD
-date -u
-[ -n "$NOCHECK" ] || (export PATH=$HOME/.elan/bin:$PATH; nohup node tools/check-lean.mjs $F $S/g$N/statement.txt check > $S/g$N/checker.log 2>&1; echo "exit $?" >> $S/g$N/checker.log) > /dev/null 2>&1 &
+git commit -q -m "Request a pull request for $ID" -m "$TRAILER"
+for i in 1 2 3 4; do git push -q origin $ID && break; sleep $((2**i)); done
+for i in 1 2 3 4; do git push -q origin claude/optimistic-ride-tshloe && break; sleep $((2**i)); done
+echo "pushed $ID at $(git -C $W/wt rev-parse --short HEAD)$NOTE, $(date -u)"
+
+# wait until the desk shows the pull request, then report it
+REASON=submitted; [ "${ID#R-}" != "$ID" ] && REASON=reduced
+for i in $(seq 1 30); do
+  sleep 30
+  # our own pull request, not somebody else's on the same step
+  if [ "$(gh api -X GET search/issues -f q="repo:open-goat/pequalnp-proofs is:pr is:open author:RChipson in:title $ID" --jq '[.items[] | select(.title == "'$ID'")] | length' 2>/dev/null)" = 1 ]; then
+    python3 generator/desk.py release $STEP $REASON; break
+  fi
+  [ $i = 30 ] && echo "no pull request seen after 15 minutes: lease NOT released, look at the workflow run"
+done
+if [ -z "$NOCHECK" ] && [ "${ID#L-}" != "$ID" ]; then
+  cp "$SRC" $F
+  (export PATH=$HOME/.elan/bin:$PATH; flock /tmp/lean.lock node tools/check-lean.mjs $F $W/statement.txt check > $W/checker.log 2>&1; echo "exit $?" >> $W/checker.log; rm -f $F) > /dev/null 2>&1 &
+fi
