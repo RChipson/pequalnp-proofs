@@ -28,4 +28,4 @@ git commit -q -m "Request a pull request for L-meta-$N" -m "$TRAILER"
 git push -q origin L-meta-$N claude/optimistic-ride-tshloe 2>&1 | grep -v '^remote:' || true
 git -C $S/wt$N rev-parse HEAD
 date -u
-(export PATH=$HOME/.elan/bin:$PATH; nohup node tools/check-lean.mjs $F $S/g$N/statement.txt check > $S/g$N/checker.log 2>&1; echo "exit $?" >> $S/g$N/checker.log) > /dev/null 2>&1 &
+[ -n "$NOCHECK" ] || (export PATH=$HOME/.elan/bin:$PATH; nohup node tools/check-lean.mjs $F $S/g$N/statement.txt check > $S/g$N/checker.log 2>&1; echo "exit $?" >> $S/g$N/checker.log) > /dev/null 2>&1 &
