@@ -95,6 +95,15 @@ machine, printed ACCEPTED.
 | L-meta-3696 | 7610 | 2nd | ACCEPTED | ordinary proof (counting bound for graphs with no four-cycle) |
 | L-meta-2677 | 7766 | 2nd | ACCEPTED | ordinary proof |
 | L-meta-3746, 3747, 3751, 3753 | 7972, 7976, 8010, 8023 | 3rd each | ACCEPTED for 3751; the others compile | explicit-circuit data, packed truth tables |
+| L-meta-3771 | 8159 | 1st | ACCEPTED | ordinary proof with a small kernel check |
+| L-meta-3829, 3859, 3849, 3851, 3957, 3961 | 8224, 8234, 8239, 8248, 8262, 8278 | 1st each | ACCEPTED for 3829; the rest queued | glue on the 14-gate certificate |
+| L-meta-4091 | 8402 | 1st | queued | ordinary proof |
+| L-meta-4069 | 8396 | 2nd | queued | ordinary proof |
+
+A lesson on memory: the project's verifier already needs about 11 GB here for any file,
+and a kernel check that enumerates tens of thousands of cases adds gigabytes. Two
+proofs (the 14-input data template and 3771) had to be rewritten to enumerate far
+fewer cases before the verifier would finish on this machine.
 
 What wins: steps that need the big certificate plus a short new argument. The certificate
 is kept pre-compiled here, so the new part compiles in seconds and the pull request is
