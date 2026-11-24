@@ -250,6 +250,34 @@ if __name__ == '__main__':
         run('1666: raw without raw4, with its negation', wires(tg, [n4 + (SPEC1,)]), 14, range(0, 7))
         tg = {1: NONE, 2: NONE, 3: NONE, 4: DEG3, 5: NONE, 6: DEG3, 7: DEG3, 8: NONE}
         run('1665/3271: raw without raw0, with its negation', wires(tg, [n0 + (NONE,)]), 14, range(0, 7))
+    elif which == 'negs':
+        # generic: argv[3] = K, argv[4] = comma list of raw indices kept, argv[5] = comma list
+        # of indices whose negation is given, argv[6] = NOT counts.  All tags NONE.
+        K = int(sys.argv[3])
+        keep = [int(x) for x in sys.argv[4].split(',') if x != '']
+        negs = [int(x) for x in sys.argv[5].split(',') if x != '']
+        ts = [int(x) for x in sys.argv[6].split(',')]
+        tg = {j: NONE for j in keep}
+        run(f'negs K={K} keep={keep} negs={negs}', wires(tg, [NOT(raw[i]) + (NONE,) for i in negs]), K, ts)
+    elif which == 'gen':
+        # generic: argv[3] = K, argv[4] = raw indices kept, argv[5] = extra wires such as
+        # n0 (NOT x0), o04 (OR), a01 (AND), o041 (OR of three), separated by commas,
+        # argv[6] = NOT counts, argv[7] (optional) = indices tagged DEG3.  Other tags NONE.
+        K = int(sys.argv[3])
+        keep = [int(x) for x in sys.argv[4].split(',') if x != '']
+        ts = [int(x) for x in sys.argv[6].split(',')]
+        d3 = [int(x) for x in sys.argv[7].split(',')] if len(sys.argv) > 7 else []
+        def mk(e):
+            if e[0] == 'n': return NOT(raw[int(e[1])])
+            f = OR if e[0] == 'o' else AND
+            r = raw[int(e[1])]
+            for ch in e[2:]:
+                r = f(r, NOT(raw[int(e[e.index('!') + 1])]) if ch == '!' else raw[int(ch)])
+                if ch == '!': break
+            return r
+        ex = [mk(e) + (NONE,) for e in sys.argv[5].split(',') if e != '']
+        tg = {j: (DEG3 if j in d3 else NONE) for j in keep}
+        run(f'gen K={K} keep={keep} extra={sys.argv[5]}', wires(tg, ex), K, ts)
     elif which == 'plain':
         # no tags at all: the nine inputs, K gates (third argument), each NOT count
         K = int(sys.argv[3]); ts = [int(x) for x in sys.argv[4].split(',')]
