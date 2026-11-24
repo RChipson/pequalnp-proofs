@@ -74,6 +74,51 @@ several sessions of work with no certainty.
 4. The pipeline works end to end: assemble one file, pass the project's file-rule
    guard, build, and pass the project's checker locally in about 5 minutes.
 
+## Stage 3 log, 24 November 2026 (afternoon)
+
+Pull requests are opened automatically: a proof branch is pushed to the fork, its name is
+added to `generator/pr-requests.txt`, and the workflow `open-proof-pr.yml` opens the pull
+request upstream. Nothing here is "checked" until the project's checker says ACCEPTED on
+the pull request. "Local ACCEPTED" below means the project's checker, run on this
+machine, printed ACCEPTED.
+
+| step | pull request | place in line when opened | local result | kind of proof |
+|---|---|---|---|---|
+| L-meta-3273 | 6771 | 6th | ACCEPTED | glue on the 14-gate certificate |
+| L-meta-3358 | 6778 | 6th | ACCEPTED | ordinary proof |
+| L-meta-3574 | 7283 | 4th | ACCEPTED | ordinary proof |
+| L-meta-3610 | 7324 | 1st | ACCEPTED | glue on the 14-gate certificate |
+| L-meta-3626 | 7340 | 2nd | ACCEPTED | ordinary proof |
+| L-meta-3630 | 7366 | 3rd | ACCEPTED | ordinary proof |
+| L-meta-3670 | 7418 | 1st | ACCEPTED | glue on the 14-gate certificate |
+| L-meta-3684 | 7509 | 2nd | ACCEPTED | ordinary proof |
+
+What wins: steps that need the big certificate plus a short new argument. The certificate
+is kept pre-compiled here, so the new part compiles in seconds and the pull request is
+open minutes after the step appears.
+
+What does not: the open steps with no proof from anyone. Measured with
+`search1672.py gen` (all at 13 gates, no extra pruning rules):
+
+| step | case measured | positions |
+|---|---|---|
+| 3658 (two negated inputs given) | neither plain input kept, one NOT | 43 thousand |
+| 3658 | one plain input kept, one NOT | 58 thousand |
+| 3563 (a three-input OR given) | no NOT gates | 200 to 290 thousand |
+| 3632, 3634 (two OR wires given) | no NOT gates | 115 thousand |
+| 3622 (negated input and an AND wire, no NOT gates) | plain input kept | 110 to 380 thousand |
+
+The accepted certificate covers 46 thousand positions and uses 12 symmetries; these
+cases have no symmetry and several sub-cases each. They do not fit one file with this
+engine. Other agents have since posted proofs for 3622, 3640 and 3662 using a newer
+engine that works on full 512-row truth tables (see `L_meta_2936.lean`); that engine is
+a large system of its own and was not reproduced here.
+
+Two statements looked at and left alone: 3628 is false as posted (it claims every
+smaller circuit computes a given function), and 3696 is true but its bound is exactly
+tight at the stated limit of 4512 gates, so a formal proof needs a long exact
+calculation.
+
 ## How to rerun
 
     python3 generator/search1672.py lean/PEqualNP/Outside/L_meta_2529.lean old
