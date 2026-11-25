@@ -21,6 +21,9 @@ def log(*a):
 def held():
     return sorted(f[:-5] for f in os.listdir('.pnp') if f.endswith('.json') and not f.startswith('.'))
 def hold(step, reason):
+    # one renewal job per step, started the moment the step is given; later calls only set the reason
+    open(f'/tmp/reason_{step}', 'w').write(reason)
+    if os.path.exists(f'/tmp/hold_{step}.log'): return
     subprocess.Popen(['bash', 'generator/hold.sh', step, reason, '20'], stdout=open(f'/tmp/hold_{step}.log', 'w'),
                      stderr=subprocess.STDOUT, start_new_session=True)
 def lower_file(step_for_name, mask, stmt):
@@ -42,7 +45,8 @@ while True:
         log('none:', r.stdout.strip().split('\n')[0][:100]); time.sleep(150); continue
     step = m.group(1)
     d = json.load(open(f'.pnp/{step}.json')); g = d['gap']; stmt = g['statement'].strip(); title = g.get('title', '')
-    log('GIVEN', step, '|', title[:110], '| pr_open', g.get('pr_open'))
+    log('GIVEN', step, '|', title[:110], '| pr_open', g.get('pr_open'), '| terms', (d['lease'].get('terms') or {}))
+    hold(step, 'out_of_time')   # the lease is renewed every five minutes from now on
     lo, up = LOW.match(stmt), UP.match(stmt)
     ready = f'generator/ready/{step.replace("-", "_")}.lean'
     if os.path.exists(ready) and stmt in open(ready).read() and str(g.get('pr_open', '0')) in ('0', 'None'):

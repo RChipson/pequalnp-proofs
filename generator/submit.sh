@@ -6,7 +6,7 @@
 #   - the project's own file-rule guard is run against the live step list;
 #   - one branch named after the step, ONE unsigned commit whose message is the step id,
 #     one file, made off upstream/main with the numbered no-reply address;
-#   - the request line (with the word types when the file declares its own data types or
+#   - the request line (the step id, the lease id for the pull request's Lease line, and the word types when the file declares its own data types or
 #     instances) makes the fork's workflow open the pull request;
 #   - once the desk shows the pull request, the lease is released with reason submitted
 #     (reason reduced for a reduction).
@@ -32,6 +32,9 @@ CODE=$(curl -sS -m 30 -o $W/beat.json -w '%{http_code}' -X POST "https://pequaln
 [ "$CODE" = 200 ] || { echo "the desk answered $CODE to the renewal: not sending"; exit 1; }
 
 git fetch -q upstream main
+# the project's stop notice, and its rule that a recorded proof is final
+if git cat-file -e upstream/main:STOP 2>/dev/null; then echo "STOPPED by a notice on the proofs repository: nothing is sent"; exit 120; fi
+if git cat-file -e upstream/main:$F 2>/dev/null; then echo "$ID was just proved by someone else (its file is on main): nothing is sent"; exit 1; fi
 cp "$SRC" $F
 curl -s https://data.pequalnp.com/data/desk/gaps.json -o $W/gaps.json
 if [ "${ID#L-}" != "$ID" ]; then
@@ -50,7 +53,7 @@ cp $F $W/wt/$F
 (cd $W/wt && git add $F && git -c commit.gpgsign=false -c user.name=RChipson \
   -c user.email=213504381+RChipson@users.noreply.github.com commit -q -m "$ID")
 rm -f $F
-echo "$ID$NOTE" >> generator/pr-requests.txt
+echo "$ID $LEASE$NOTE" >> generator/pr-requests.txt
 git add generator/pr-requests.txt
 git commit -q -m "Request a pull request for $ID" -m "$TRAILER"
 for i in 1 2 3 4; do git push -q origin $ID && break; sleep $((2**i)); done
