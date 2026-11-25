@@ -76,8 +76,8 @@ while True:
             log('LOOK:', step, 'at-most-10 row whose opposite did not compile'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
     else:
         open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
-        if title.startswith('False:') or title.startswith('It is false that'):
-            log('OTHER (a counterexample row)', step, '(held 20 minutes, then out_of_time unless handled)')
+        if title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR')):
+            log('OTHER (a row at the conjectured bound)', step, '(held 20 minutes, then out_of_time unless handled)')
         else:
             log('STOP: a step worth a real attempt:', step); print(r.stdout[:7000], flush=True); sys.exit(0)
     time.sleep(20)
