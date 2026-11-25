@@ -139,21 +139,30 @@ def main():
     p = parse(stmt)
     if not p: print('not a six-input row of this shape'); return 2
     expr, T = p
-    # the smallest k for which a circuit is found; a size that does not answer within the time
-    # limit is skipped (the witness need not be proved least: the search below is what counts)
-    gates = None
-    for k in range(2, 12):
+    # A circuit is found quickly at a generous size; then the size is lowered while the free-NOT search
+    # at depth size - 2 still finds a derivation on the samples.  The witness need not be proved least:
+    # the kernel-checked search at depth size - 2 is what the proof rests on.
+    def synth(k, secs):
         try:
-            r = subprocess.run([sys.executable, os.path.abspath(__file__), 'synth', str(T), str(k)], capture_output=True, text=True, timeout=SYNTH_SECONDS)
+            r = subprocess.run([sys.executable, os.path.abspath(__file__), 'synth', str(T), str(k)], capture_output=True, text=True, timeout=secs)
         except subprocess.TimeoutExpired:
-            continue
-        if r.stdout.startswith('GATES'):
-            gates = eval(r.stdout[5:]); break
-    if not gates or not check_circuit(T, gates): print('no monotone circuit with at most 11 gates found'); return 1
-    m = len(gates); n = m - 2
-    if n < 1: print('function too small for this method'); return 1
-    best = samples(T, n)
-    if not best: print(f'monotone size {m}: the free-NOT search with {n} steps finds a circuit on every sample tried'); return 1
+            return None
+        return eval(r.stdout[5:]) if r.stdout.startswith('GATES') else None
+    gates = None
+    for k in (9, 10, 11, 12):
+        gates = synth(k, SYNTH_SECONDS)
+        if gates: break
+    if not gates or not check_circuit(T, gates): print('no monotone circuit with at most 12 gates found'); return 1
+    best = None
+    while True:
+        m = len(gates); n = m - 2
+        if n < 1: print('function too small for this method'); return 1
+        best = samples(T, n)
+        if best: break
+        smaller = synth(m - 1, SYNTH_SECONDS)
+        if not smaller or not check_circuit(T, smaller):
+            print(f'monotone size {m} (no smaller circuit found): the free-NOT search with {n} steps finds a circuit on every sample tried'); return 1
+        gates = smaller
     calls, pairs, ws = best
     open(out, 'w').write(lean(step, stmt, expr, n, m, ws, gates))
     print(f'wrote {out}: monotone size {m}, search depth {n}, {calls} calls'); return 0
