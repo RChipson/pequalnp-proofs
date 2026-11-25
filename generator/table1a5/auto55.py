@@ -88,12 +88,12 @@ def rect_file(step, stmt, seconds=780):
                        capture_output=True, text=True, env=ENV)
     bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
     return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, 'compiled')
-def six_file(step, stmt):
-    d = f'{S}/desk/six/auto'; os.makedirs(d, exist_ok=True)
+def six_file(step, stmt, script='generator/sixinput/gen6.py', sub='six'):
+    d = f'{S}/desk/{sub}/auto'; os.makedirs(d, exist_ok=True)
     sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
     out = f'{d}/{step.replace("-", "_")}.lean'
     try:
-        r = subprocess.run(['python3', 'generator/sixinput/gen6.py', step, sf, out], capture_output=True, text=True, timeout=1500)
+        r = subprocess.run(['python3', script, step, sf, out], capture_output=True, text=True, timeout=1500)
     except subprocess.TimeoutExpired:
         return None, 'generator timed out'
     if r.returncode != 0: return None, (r.stdout + r.stderr).strip()[-200:]
@@ -103,6 +103,12 @@ def six_file(step, stmt):
     return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, r.stdout.strip()[-120:])
 SIX = ('Table 2: for the monotone six-input f', 'Table 2: six-input monotone f')
 SIXF = ('False: for the monotone six-input f', 'False: six-input monotone f')
+def eight_file(step, stmt):
+    return six_file(step, stmt, 'generator/onenot8/gen8.py', 'onenot8')
+ONE8 = 'At fan-in two, one NOT gate saves nothing on edges'
+ONE8F = 'It is false that: At fan-in two, one NOT gate saves nothing on edges'
+def is8(st):
+    return 'Fin 8 → Bool' in st
 ASK = 0
 # after a restart: every step still held gets its renewal job back (it hands the step back when its time is up)
 for st in held():
@@ -155,6 +161,30 @@ while True:
                 send_twin(tw, lambda tid, tstmt: lower_file(tid, int(up.group(1)), tstmt)[0])
         else:
             log('LOOK:', step, 'at-most-10 row whose opposite did not compile'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
+    elif title.startswith(ONE8) and is8(stmt):
+        if str(g.get('pr_open', '0')) not in ('0', 'None'):
+            log(step, 'eight-vertex row with a pull request already waiting; handing back after 20 minutes')
+        else:
+            out, why = eight_file(step, stmt)
+            if out:
+                s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                log('SENT', step, '|', why, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
+            else:
+                log('eight-vertex row', step, why[:160], '; handing back after 20 minutes')
+    elif title.startswith(ONE8F) and is8(stmt):
+        tw = twin_of(stmt)
+        if not tw:
+            log('eight-vertex refutation row', step, ': twin not found; handing back after 20 minutes')
+        elif str(tw.get('pr_open', '0')) not in ('0', 'None'):
+            log('eight-vertex refutation row', step, ': twin', tw['id'], 'already has a pull request; handing back after 20 minutes')
+        else:
+            out, why = eight_file(tw['id'], tw['statement'].strip())
+            if out:
+                if send_twin(tw, lambda tid, tstmt: out):
+                    rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'statement_seems_false'], capture_output=True, text=True)
+                    log('handed back', step, 'as statement_seems_false |', rr.stdout.strip()[:80])
+            else:
+                log('eight-vertex refutation row', step, ': twin not proved (', why[:120], '); handing back after 20 minutes')
     elif title.startswith(SIX):
         if str(g.get('pr_open', '0')) not in ('0', 'None'):
             log(step, 'six-input row with a pull request already waiting; handing back after 20 minutes')
