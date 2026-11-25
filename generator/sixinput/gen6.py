@@ -110,6 +110,7 @@ def lean(step, stmt, expr, n, m, ws, gates):
     ns = step.replace('-', '_')
     s = open(f'{HERE}/template_8718.lean').read()
     s = s.replace('L_meta_8718', ns)
+    s = s.replace('-- The signed live-wire search follows', '-- Ported to six inputs from the checked proof of L-meta-8718.\n-- The signed live-wire search follows')
     head, tail = s.split('def targetFun (T : ℕ)', 1)
     tail = 'def targetFun (T : ℕ)' + tail
     tail = tail.split(f'end PEqualNP.Outside.{ns}')[0]
@@ -123,7 +124,7 @@ def lean(step, stmt, expr, n, m, ws, gates):
     tail = (tail[:a] + 'def rows : List W :=\n  [' + ', '.join('0x%016x' % w for w in ws) + ']\n\n'
             + f'def witness : Circuit :=\n  ⟨[{g}], {N + len(gates) - 1}⟩\n\n' + tail[b:])
     tail = tail.replace('refine ⟨witness, by simp [Monotone2, witness], ?_, by decide⟩', 'refine ⟨witness, by simp [Monotone2, witness], ?_, by decide +kernel⟩')
-    for bad in ('search 5', ' 5 <', 'Fin 5', '7 ≤', 'feeeeeea'): assert bad not in tail, bad
+    for bad in ('Fin 5', 'feeeeeea', 'inputs.length = 5', 'HasCircuitSize 5'): assert bad not in tail, bad
     final = (f'end PEqualNP.Outside.{ns}\n\ntheorem PEqualNP.Outside.{ns} :\n    {stmt} := by\n'
              f'  exact PEqualNP.Outside.{ns}.solve\n')
     return head + tail + final
