@@ -23,7 +23,7 @@ def held():
 def hold(step, reason):
     # one renewal job per step, started the moment the step is given; later calls only set the reason
     open(f'/tmp/reason_{step}', 'w').write(reason)
-    if os.path.exists(f'/tmp/hold_{step}.log'): return
+    if subprocess.run(['pgrep', '-f', f'generator/hold.sh {step} '], capture_output=True).returncode == 0: return
     subprocess.Popen(['bash', 'generator/hold.sh', step, reason, '20'], stdout=open(f'/tmp/hold_{step}.log', 'w'),
                      stderr=subprocess.STDOUT, start_new_session=True)
 def lower_file(step_for_name, mask, stmt):
