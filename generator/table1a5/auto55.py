@@ -83,7 +83,7 @@ while True:
     if len(held()) >= 5:
         time.sleep(60); continue
     ASK += 1
-    extra = [['--kind', 'prove'], ['--kind', 'search'], ['--kind', 'prove', '--level', 'open'], []][ASK % 4]
+    extra = [['--kind', 'prove'], ['--kind', 'prove', '--level', 'open'], []][ASK % 3]
     r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
     m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
     if not m:
@@ -148,7 +148,9 @@ while True:
             log('rectangle lower-bound row', step, ': twin missing or already sent by someone; handing back after 20 minutes')
     else:
         open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
-        if title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR', 'Table 2: 9 vertices', 'At fan-in two, one NOT gate')):
+        if 'shard' in d or title.startswith(('Search:', 'A step toward:')):
+            log('OTHER (a search range or a step of a hard cut: beyond our tools)', step, '(held 20 minutes, then out_of_time)')
+        elif title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR', 'Table 2:', 'At fan-in two, one NOT gate')):
             log('OTHER (a row at the conjectured bound)', step, '(held 20 minutes, then out_of_time unless handled)')
         else:
             log('STOP: a step worth a real attempt:', step); print(r.stdout[:7000], flush=True); sys.exit(0)
