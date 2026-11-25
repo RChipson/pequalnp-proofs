@@ -22,6 +22,11 @@ case "$ID" in
 esac
 [ -f .pnp/$STEP.json ] || { echo "no live lease on $STEP: nothing is sent"; exit 1; }
 F=lean/PEqualNP/Outside/$(echo "$ID" | tr '-' '_').lean
+# a value step's file is named after the value claimed (set by: generator/desk.py value <step> <k>)
+if [ "${ID#L-}" != "$ID" ]; then
+  LF=$(python3 -c "import json;print(json.load(open('.pnp/$STEP.json'))['gap'].get('file') or '')")
+  echo "$LF" | grep -Eq '^lean/PEqualNP/Outside/[A-Za-z0-9_]+\.lean$' && F=$LF
+fi
 W=$S/send-$ID; mkdir -p $W
 if grep -q '"' "$SRC"; then echo "double quote in file"; exit 1; fi
 [ "$(wc -c < "$SRC")" -le 524288 ] || { echo "file larger than 512 KiB"; exit 1; }
@@ -38,8 +43,10 @@ if git cat-file -e upstream/main:$F 2>/dev/null; then echo "$ID was just proved 
 cp "$SRC" $F
 curl -s https://data.pequalnp.com/data/desk/gaps.json -o $W/gaps.json
 if [ "${ID#L-}" != "$ID" ]; then
-  node .github/scripts/outside-guard.mjs gap $W/gaps.json $ID $F $W check | tail -1
-  node .github/scripts/outside-guard.mjs imports $F $W/imports.json $F check | tail -1
+  # the project's current guard, read from its main branch
+  git show upstream/main:.github/scripts/outside-guard.mjs > $W/outside-guard.mjs
+  node $W/outside-guard.mjs gap $W/gaps.json $ID $F $W check | tail -1
+  node $W/outside-guard.mjs imports $F $W/imports.json $F check | tail -1
   python3 -c "import json;open('$W/lease-statement.txt','w').write(json.load(open('.pnp/$STEP.json'))['gap']['statement'])"
   cmp $W/statement.txt $W/lease-statement.txt
 fi

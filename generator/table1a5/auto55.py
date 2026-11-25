@@ -36,13 +36,58 @@ def lower_file(step_for_name, mask, stmt):
                        capture_output=True, text=True, env=ENV)
     bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr) or 'sorry' in open(out).read()
     return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, 'compiled')
+def twin_of(stmt):
+    # the opposite row, listed beside the step in the public desk file (join.txt: if you believe a
+    # step is false, prove its negated twin)
+    try:
+        raw = subprocess.run(['curl', '-s', '-m', '60', 'https://data.pequalnp.com/data/desk/gaps.json'], capture_output=True, text=True).stdout
+        want = stmt[3:-1] if stmt.startswith('¬ (') and stmt.endswith(')') else '¬ (' + stmt + ')'
+        for g in json.loads(raw)['gaps']:
+            if g.get('statement', '').strip() == want: return g
+    except Exception as e:
+        log('twin lookup failed', e)
+    return None
+def send_twin(twin, make):
+    # make(twin id, twin statement) -> path of a compiled proof file, or None
+    if str(twin.get('pr_open', '0')) not in ('0', 'None'):
+        log('twin', twin['id'], 'already has a pull request waiting; not sent'); return False
+    out = make(twin['id'], twin['statement'].strip())
+    if not out: return False
+    if len(held()) >= 5:
+        log('twin', twin['id'], 'proved but five steps are held; not leased now'); return False
+    r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--proof-of', twin['id']], capture_output=True, text=True)
+    m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
+    if not m or m.group(1) != twin['id']:
+        log('twin', twin['id'], 'could not be leased:', r.stdout.strip()[:200])
+        if m: hold(m.group(1), 'out_of_time')
+        return False
+    hold(twin['id'], 'out_of_time')
+    got = json.load(open(f'.pnp/{twin["id"]}.json'))['gap']['statement'].strip()
+    if got != twin['statement'].strip():
+        log('twin', twin['id'], 'statement differs from the public file; not sent'); return False
+    s3 = subprocess.run(['bash', 'generator/submit.sh', twin['id'], out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+    log('SENT TWIN', twin['id'], '|', (s3.stdout + s3.stderr).strip().split('\n')[-1][:200])
+    return True
+def rect_file(step, stmt, seconds=780):
+    d = f'{S}/desk/rect'; os.makedirs(d, exist_ok=True)
+    sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
+    out = f'{d}/{step.replace("-", "_")}.lean'
+    r = subprocess.run(['python3', 'generator/rect/rectcover.py', step, sf, out, str(seconds)], capture_output=True, text=True)
+    if r.returncode != 0: return None, r.stdout.strip()[-200:]
+    c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {out}', shell=True,
+                       capture_output=True, text=True, env=ENV)
+    bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
+    return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, 'compiled')
+ASK = 0
 while True:
     if len(held()) >= 5:
         time.sleep(60); continue
-    r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'], capture_output=True, text=True)
+    ASK += 1
+    extra = [['--kind', 'prove'], ['--kind', 'search'], ['--kind', 'prove', '--level', 'open'], []][ASK % 4]
+    r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
     m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
     if not m:
-        log('none:', r.stdout.strip().split('\n')[0][:100]); time.sleep(150); continue
+        log('none', extra, ':', r.stdout.strip().split('\n')[0][:100]); time.sleep(150 if 'checker is behind' in r.stdout else 40); continue
     step = m.group(1)
     d = json.load(open(f'.pnp/{step}.json')); g = d['gap']; stmt = g['statement'].strip(); title = g.get('title', '')
     log('GIVEN', step, '|', title[:110], '| pr_open', g.get('pr_open'), '| terms', (d['lease'].get('terms') or {}))
@@ -76,8 +121,31 @@ while True:
         if gch.returncode == 0 and c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr):
             log(step, 'is false: its opposite compiles locally; holding 20 minutes then statement_seems_false')
             hold(step, 'statement_seems_false')
+            tw = twin_of(stmt)
+            if tw:
+                send_twin(tw, lambda tid, tstmt: lower_file(tid, int(up.group(1)), tstmt)[0])
         else:
             log('LOOK:', step, 'at-most-10 row whose opposite did not compile'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
+    elif title.startswith('Rectangles:') and not stmt.startswith('¬'):
+        if str(g.get('pr_open', '0')) not in ('0', 'None'):
+            log(step, 'rectangle row with a pull request already waiting; handing back after 20 minutes')
+        else:
+            out, why = rect_file(step, stmt)
+            if out:
+                s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                log('SENT', step, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
+            else:
+                log('rectangle row', step, why[:200], '; handing back after 20 minutes')
+    elif title.startswith('Rectangles:'):
+        # the row says no such cover exists; if the search finds one the row is false and its twin is sent
+        tw = twin_of(stmt)
+        if tw and str(tw.get('pr_open', '0')) in ('0', 'None'):
+            if send_twin(tw, lambda tid, tstmt: rect_file(tid, tstmt)[0]):
+                open(f'/tmp/reason_{step}', 'w').write('statement_seems_false')
+            else:
+                log('rectangle lower-bound row', step, ': no cover found, handing back after 20 minutes')
+        else:
+            log('rectangle lower-bound row', step, ': twin missing or already sent by someone; handing back after 20 minutes')
     else:
         open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
         if title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR', 'Table 2: 9 vertices', 'At fan-in two, one NOT gate')):

@@ -2,10 +2,11 @@
 this session has no signed-in `gh` for the upstream repository).
 
   python3 generator/desk.py next [--another] [--hard] [--level warmup|solid|hard|open]
-                                 [--kind prove|refute|search|cut] [--proof-of <step>]
+                                 [--kind prove|refute|search|cut|value] [--value] [--proof-of <step>]
                                                          take a step with a lease; print it
                                                          (--proof-of: lease a step we already hold a
                                                          compiled proof of, as join.txt allows)
+  python3 generator/desk.py value <step> <k>             a value step: record the k we claim
   python3 generator/desk.py beat                         renew every lease we hold
   python3 generator/desk.py held                         list the leases we hold
   python3 generator/desk.py release <step> <reason>      give a step back with an honest reason
@@ -67,6 +68,7 @@ def main():
         for name in ('--level', '--kind'):
             v = opt(name, r'[a-z]{1,10}')
             if v: q += f'&{name[2:]}={v}'
+        if '--value' in sys.argv: q += '&value=1'   # value steps are handed out only when asked for
         v = opt('--proof-of', r'L-[a-z]+-[0-9]+')
         if v: q += f'&gap={v}&have=proof'
         code, body = call('GET', '/next?' + q)
@@ -90,7 +92,11 @@ def main():
         for k in ('shard', 'shards'):
             if k in d: print(k.upper() + ':', d[k])
         if g.get('shard_spec'): print('SHARD_SPEC:', str(g['shard_spec'])[:900])
-        if not path or not re.fullmatch(r'lean/PEqualNP/Outside/[A-Za-z0-9_]+\.lean', path):
+        if g.get('kind') == 'value':
+            print('VALUE STEP: find the least k from 0 to value_max for which the template holds, then: desk.py value', gid, '<k>')
+            print('TEMPLATE:', g.get('template')); print('VALUE_MAX:', g.get('value_max'), '|', g.get('value_max_why'))
+            print('SIZE:', g.get('size_in_words')); print('FILE_FORM:', g.get('file_form'))
+        elif not path or not re.fullmatch(r'lean/PEqualNP/Outside/[A-Za-z0-9_]+\.lean', path):
             print('NOTE: this step has no ordinary file (a value step or malformed); look at', f'{STATE}/{gid}.json')
         for k in ('unlocks', 'context', 'sketch', 'refutation'):
             if g.get(k): print(k.upper() + ':', (g[k] if isinstance(g[k], str) else json.dumps(g[k]))[:900])
@@ -107,6 +113,18 @@ def main():
             else:
                 print(step, 'beat answered', code, body[:200])
             time.sleep(3)
+        return 0
+    if cmd == 'value':
+        # a value step: record the k we claim; the file is V_<gap>__k<k>.lean and the statement is
+        # the template with k put in for every @@VALUE@@ (as tools/pnp.sh value does)
+        step, k = sys.argv[2], sys.argv[3]
+        d = load(step); g = d['gap']
+        assert g.get('kind') == 'value' and re.fullmatch(r'0|[1-9][0-9]{0,3}', k) and int(k) <= g['value_max']
+        name = 'V_%s__k%s' % (step[2:].replace('-', '_'), k)
+        g['file'] = f'lean/PEqualNP/Outside/{name}.lean'; g['module'] = 'PEqualNP.Outside.' + name
+        g['value'] = int(k); g['statement'] = k.join(g['template'].split('@@VALUE@@'))
+        json.dump(d, open(f'{STATE}/{step}.json', 'w'), indent=1)
+        print('FILE', g['file'], '| theorem', g['module']); print('STATEMENT:', g['statement'])
         return 0
     if cmd == 'held':
         for step in held():
