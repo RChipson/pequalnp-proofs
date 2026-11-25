@@ -101,6 +101,28 @@ def six_file(step, stmt, script='generator/sixinput/gen6.py', sub='six'):
                        capture_output=True, text=True, env=ENV)
     bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
     return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, r.stdout.strip()[-120:])
+def auto_file(step, stmt):
+    # a short portfolio of standard tactics, for steps we have no method for (often small pieces of a cut)
+    d = f'{S}/desk/autotac'; os.makedirs(d, exist_ok=True)
+    name = step.replace('-', '_'); out = f'{d}/{name}.lean'
+    open(out, 'w').write('import Mathlib\nimport PEqualNP.Defs\n\ntheorem PEqualNP.Outside.' + name + ' : ' + stmt + ''' := by
+  first
+    | decide
+    | (intros; simp_all)
+    | (intros; omega)
+    | (intros; tauto)
+    | (intros; aesop)
+    | simp
+    | norm_num
+''')
+    try:
+        c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 300 lake env lean {out}', shell=True,
+                           capture_output=True, text=True, env=ENV, timeout=900)
+    except subprocess.TimeoutExpired:
+        return None
+    txt = c.stdout + c.stderr
+    if c.returncode != 0 or re.search(r'\berror\b', txt) or 'sorry' in txt: return None
+    return out
 SIX = ('Table 2: for the monotone six-input f', 'Table 2: six-input monotone f')
 SIXF = ('False: for the monotone six-input f', 'False: six-input monotone f')
 def eight_file(step, stmt):
@@ -235,6 +257,12 @@ while True:
             log('rectangle lower-bound row', step, ': twin missing or already sent by someone; handing back after 20 minutes')
     else:
         open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
+        if str(g.get('pr_open', '0')) in ('0', 'None') and 'shard' not in d and len(stmt) < 6000 and not title.startswith(('It is false that', 'False:')):
+            ao = auto_file(step, stmt)
+            if ao:
+                s = subprocess.run(['bash', 'generator/submit.sh', step, ao], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                log('SENT (standard tactics)', step, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
+                time.sleep(20); continue
         if 'shard' in d or title.startswith(('Search:', 'A step toward:', 'Rung', 'No cutting planes', 'Cutting planes', 'No run of clause learning', 'Clause learning', 'Multiplexer', 'Resolution on', 'Res(')) or (d['lease'].get('terms') or {}).get('level') == 'hard':
             log('OTHER (a search range or a step of a hard cut: beyond our tools)', step, '(held 20 minutes, then out_of_time)')
         elif title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR', 'Table 2:', 'At fan-in two, one NOT gate')):
