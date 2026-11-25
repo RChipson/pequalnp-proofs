@@ -66,7 +66,7 @@ while True:
             log(step, 'is false: its opposite compiles locally; holding 20 minutes then statement_seems_false')
             hold(step, 'statement_seems_false')
         else:
-            log('STOP:', step, 'at-most-10 row whose opposite did not compile; needs a look'); hold(step, 'out_of_time'); sys.exit(0)
+            log('LOOK:', step, 'at-most-10 row whose opposite did not compile'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
     else:
-        log('STOP: other kind of step', step); print(r.stdout[:6000]); hold(step, 'out_of_time'); sys.exit(0)
+        log('OTHER kind of step', step, '(held 20 minutes, then out_of_time unless handled)'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
     time.sleep(20)
