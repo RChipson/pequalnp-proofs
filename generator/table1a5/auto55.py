@@ -19,7 +19,7 @@ UP = re.compile(r'^PEqualNP\.Represents\.RepSizeAtMost \(fun u v : Fin 5 => \((\
 def log(*a):
     print(time.strftime('%H:%M:%S', time.gmtime()), *a, flush=True)
 def held():
-    return sorted(f[:-5] for f in os.listdir('.pnp') if f.endswith('.json'))
+    return sorted(f[:-5] for f in os.listdir('.pnp') if f.endswith('.json') and not f.startswith('.'))
 def hold(step, reason):
     subprocess.Popen(['bash', 'generator/hold.sh', step, reason, '20'], stdout=open(f'/tmp/hold_{step}.log', 'w'),
                      stderr=subprocess.STDOUT, start_new_session=True)
@@ -75,5 +75,9 @@ while True:
         else:
             log('LOOK:', step, 'at-most-10 row whose opposite did not compile'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
     else:
-        log('OTHER kind of step', step, '(held 20 minutes, then out_of_time unless handled)'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
+        open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
+        if title.startswith('False:') or title.startswith('It is false that'):
+            log('OTHER (a counterexample row)', step, '(held 20 minutes, then out_of_time unless handled)')
+        else:
+            log('STOP: a step worth a real attempt:', step); print(r.stdout[:7000], flush=True); sys.exit(0)
     time.sleep(20)
