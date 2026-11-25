@@ -263,7 +263,7 @@ while True:
                 s = subprocess.run(['bash', 'generator/submit.sh', step, ao], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
                 log('SENT (standard tactics)', step, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
                 time.sleep(20); continue
-        if 'shard' in d or title.startswith(('Search:', 'A step toward:', 'Rung', 'No cutting planes', 'Cutting planes', 'No run of clause learning', 'Clause learning', 'Multiplexer', 'Resolution on', 'Res(')) or (d['lease'].get('terms') or {}).get('level') == 'hard':
+        if 'shard' in d or title.startswith(('Search:', 'A step toward:', 'Rung', 'Cut of', 'No cutting planes', 'Cutting planes', 'No run of clause learning', 'Clause learning', 'Multiplexer', 'Resolution on', 'Res(')) or (d['lease'].get('terms') or {}).get('level') == 'hard':
             log('OTHER (a search range or a step of a hard cut: beyond our tools)', step, '(held 20 minutes, then out_of_time)')
         elif title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR', 'Table 2:', 'At fan-in two, one NOT gate')):
             log('OTHER (a row at the conjectured bound)', step, '(held 20 minutes, then out_of_time unless handled)')
