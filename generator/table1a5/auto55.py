@@ -94,11 +94,15 @@ def six_file(step, stmt):
 SIX = ('Table 2: for the monotone six-input f', 'Table 2: six-input monotone f')
 SIXF = ('False: for the monotone six-input f', 'False: six-input monotone f')
 ASK = 0
+# after a restart: every step still held gets its renewal job back (it hands the step back when its time is up)
+for st in held():
+    r0 = open(f'/tmp/reason_{st}').read().strip() if os.path.exists(f'/tmp/reason_{st}') else 'out_of_time'
+    hold(st, r0)
 while True:
     if len(held()) >= 5:
         time.sleep(60); continue
     ASK += 1
-    extra = [['--kind', 'prove'], ['--kind', 'prove', '--level', 'open'], []][ASK % 3]
+    extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'open'], ['--kind', 'prove', '--level', 'solid'], []][ASK % 4]
     r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
     m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
     if not m:
