@@ -44,6 +44,13 @@ while True:
     d = json.load(open(f'.pnp/{step}.json')); g = d['gap']; stmt = g['statement'].strip(); title = g.get('title', '')
     log('GIVEN', step, '|', title[:110], '| pr_open', g.get('pr_open'))
     lo, up = LOW.match(stmt), UP.match(stmt)
+    ready = f'generator/ready/{step.replace("-", "_")}.lean'
+    if os.path.exists(ready) and stmt in open(ready).read() and str(g.get('pr_open', '0')) in ('0', 'None'):
+        tmp = f'{S}/desk/ready_{step.replace("-", "_")}.lean'
+        open(tmp, 'w').write(open(ready).read())
+        s2 = subprocess.run(['bash', 'generator/submit.sh', step, tmp], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+        log('SENT READY', step, '|', (s2.stdout + s2.stderr).strip().split('\n')[-1][:200])
+        time.sleep(20); continue
     if lo and str(g.get('pr_open', '0')) in ('0', 'None'):
         out, why = lower_file(step, int(lo.group(1)), stmt)
         if out:
