@@ -70,10 +70,20 @@ def send_twin(twin, make):
     return True
 def rect_file(step, stmt, seconds=780):
     d = f'{S}/desk/rect'; os.makedirs(d, exist_ok=True)
+    # a matrix on which the search already failed with K rectangles is not searched again with K or fewer
+    mm = re.search(r'L\.length ≤ (\d+) ∧.*?\(\(\[([0-9, ]+)\] : List ℕ\)\.getD i\.val 0\)\.testBit j\.val = (true|false)', stmt)
+    memo = f'{d}/failed.json'
+    failed = json.load(open(memo)) if os.path.exists(memo) else {}
+    key = (mm.group(2) + '|' + mm.group(3)) if mm else None
+    if key and failed.get(key, -1) >= int(mm.group(1)):
+        return None, f'not searched: the search already failed on this matrix with {failed[key]} rectangles'
     sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
     out = f'{d}/{step.replace("-", "_")}.lean'
     r = subprocess.run(['python3', 'generator/rect/rectcover.py', step, sf, out, str(seconds)], capture_output=True, text=True)
-    if r.returncode != 0: return None, r.stdout.strip()[-200:]
+    if r.returncode != 0:
+        if key and r.returncode == 1:
+            failed[key] = max(failed.get(key, -1), int(mm.group(1))); json.dump(failed, open(memo, 'w'))
+        return None, r.stdout.strip()[-200:]
     c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {out}', shell=True,
                        capture_output=True, text=True, env=ENV)
     bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
