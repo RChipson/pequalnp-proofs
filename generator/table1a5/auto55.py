@@ -78,6 +78,21 @@ def rect_file(step, stmt, seconds=780):
                        capture_output=True, text=True, env=ENV)
     bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
     return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, 'compiled')
+def six_file(step, stmt):
+    d = f'{S}/desk/six/auto'; os.makedirs(d, exist_ok=True)
+    sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
+    out = f'{d}/{step.replace("-", "_")}.lean'
+    try:
+        r = subprocess.run(['python3', 'generator/sixinput/gen6.py', step, sf, out], capture_output=True, text=True, timeout=1500)
+    except subprocess.TimeoutExpired:
+        return None, 'generator timed out'
+    if r.returncode != 0: return None, (r.stdout + r.stderr).strip()[-200:]
+    c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {out}', shell=True,
+                       capture_output=True, text=True, env=ENV)
+    bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
+    return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, r.stdout.strip()[-120:])
+SIX = ('Table 2: for the monotone six-input f', 'Table 2: six-input monotone f')
+SIXF = ('False: for the monotone six-input f', 'False: six-input monotone f')
 ASK = 0
 while True:
     if len(held()) >= 5:
@@ -126,6 +141,26 @@ while True:
                 send_twin(tw, lambda tid, tstmt: lower_file(tid, int(up.group(1)), tstmt)[0])
         else:
             log('LOOK:', step, 'at-most-10 row whose opposite did not compile'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
+    elif title.startswith(SIX):
+        if str(g.get('pr_open', '0')) not in ('0', 'None'):
+            log(step, 'six-input row with a pull request already waiting; handing back after 20 minutes')
+        else:
+            out, why = six_file(step, stmt)
+            if out:
+                s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                log('SENT', step, '|', why, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
+            else:
+                log('six-input row', step, why[:200], '; handing back after 20 minutes')
+    elif title.startswith(SIXF):
+        # the row denies the positive statement; if the positive one can be proved, this row is false and the twin is sent
+        tw = twin_of(stmt)
+        if tw and str(tw.get('pr_open', '0')) in ('0', 'None'):
+            if send_twin(tw, lambda tid, tstmt: six_file(tid, tstmt)[0]):
+                open(f'/tmp/reason_{step}', 'w').write('statement_seems_false')
+            else:
+                log('six-input refutation row', step, ': twin not proved or not leased; handing back after 20 minutes')
+        else:
+            log('six-input refutation row', step, ': twin missing or already has a pull request; handing back after 20 minutes')
     elif title.startswith('Rectangles:') and not stmt.startswith('¬'):
         if str(g.get('pr_open', '0')) not in ('0', 'None'):
             log(step, 'rectangle row with a pull request already waiting; handing back after 20 minutes')
