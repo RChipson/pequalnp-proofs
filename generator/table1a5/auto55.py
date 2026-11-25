@@ -205,7 +205,7 @@ while True:
             log('rectangle lower-bound row', step, ': twin missing or already sent by someone; handing back after 20 minutes')
     else:
         open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
-        if 'shard' in d or title.startswith(('Search:', 'A step toward:')):
+        if 'shard' in d or title.startswith(('Search:', 'A step toward:', 'Rung')) or (d['lease'].get('terms') or {}).get('level') == 'hard':
             log('OTHER (a search range or a step of a hard cut: beyond our tools)', step, '(held 20 minutes, then out_of_time)')
         elif title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR', 'Table 2:', 'At fan-in two, one NOT gate')):
             log('OTHER (a row at the conjectured bound)', step, '(held 20 minutes, then out_of_time unless handled)')
