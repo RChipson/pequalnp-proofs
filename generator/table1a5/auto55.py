@@ -109,8 +109,8 @@ for st in held():
     r0 = open(f'/tmp/reason_{st}').read().strip() if os.path.exists(f'/tmp/reason_{st}') else 'out_of_time'
     hold(st, r0)
 while True:
-    if len(held()) >= 5:
-        time.sleep(60); continue
+    if len(held()) >= 4:        # one of the five places stays free, so that a proved twin can always be leased
+        time.sleep(30); continue
     ASK += 1
     extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'open'], ['--kind', 'prove', '--level', 'solid'], []][ASK % 4]
     r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
@@ -166,15 +166,23 @@ while True:
             else:
                 log('six-input row', step, why[:200], '; handing back after 20 minutes')
     elif title.startswith(SIXF):
-        # the row denies the positive statement; if the positive one can be proved, this row is false and the twin is sent
+        # the row denies the positive statement.  The positive one (its twin) is proved here first; if
+        # that proof compiles the row is false: the twin is sent when nobody has sent it yet, and the
+        # row is handed back at once as statement_seems_false (our own compiled proof is the reason).
         tw = twin_of(stmt)
-        if tw and str(tw.get('pr_open', '0')) in ('0', 'None'):
-            if send_twin(tw, lambda tid, tstmt: six_file(tid, tstmt)[0]):
-                open(f'/tmp/reason_{step}', 'w').write('statement_seems_false')
-            else:
-                log('six-input refutation row', step, ': twin not proved or not leased; handing back after 20 minutes')
+        if not tw:
+            log('six-input refutation row', step, ': twin not found; handing back after 20 minutes')
         else:
-            log('six-input refutation row', step, ': twin missing or already has a pull request; handing back after 20 minutes')
+            out, why = six_file(tw['id'], tw['statement'].strip())
+            if out:
+                if str(tw.get('pr_open', '0')) in ('0', 'None'):
+                    send_twin(tw, lambda tid, tstmt: out)
+                else:
+                    log('twin', tw['id'], 'proved here but it already has a pull request waiting; not sent')
+                rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'statement_seems_false'], capture_output=True, text=True)
+                log('handed back', step, 'as statement_seems_false |', rr.stdout.strip()[:80])
+            else:
+                log('six-input refutation row', step, ': twin not proved (', why[:120], '); handing back after 20 minutes')
     elif title.startswith('Rectangles:') and not stmt.startswith('¬'):
         if str(g.get('pr_open', '0')) not in ('0', 'None'):
             log(step, 'rectangle row with a pull request already waiting; handing back after 20 minutes')
