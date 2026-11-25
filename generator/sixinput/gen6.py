@@ -80,36 +80,51 @@ def words(pairs):
         ws.append(w)
     return ws
 
-def samples(T, n, tries=400, seed=1):
-    """32 pairs (true point, false point) on which the search with n steps answers false, with the fewest calls."""
+def samples(T, n, tries=400, seed=1, good=20000, climb_seconds=120):
+    """32 pairs (true point, false point) on which the search with n steps answers false, with few calls.
+    Random choices first, then hill climbing: one pair is swapped for another and the change is kept
+    when the search still answers false with fewer calls."""
+    import time
     exe = '/tmp/livesearch_gen6'
     subprocess.run(['gcc', '-O2', '-o', exe, f'{HERE}/livesearch.c'], check=True)
     tr = [r for r in range(1 << N) if T >> r & 1]; fa = [r for r in range(1 << N) if not T >> r & 1]
     near = [(p, q) for p in tr for q in fa if bin(p ^ q).count('1') == 1]
     far = [(p, q) for p in tr for q in fa if bin(p ^ q).count('1') == 2]
     rest = [(p, q) for p in tr for q in fa if bin(p ^ q).count('1') > 2]
+    allp = near + far + rest
+    def run(pairs, limit):
+        ws = words(pairs)
+        if len(set(ws)) < N: return None
+        try:
+            out = subprocess.run([exe, str(n)] + ['%x' % w for w in ws], capture_output=True, text=True, timeout=limit).stdout.split()
+        except subprocess.TimeoutExpired:
+            return None
+        return int(out[1]) if out and out[0] == 'false' else None
     rnd = random.Random(seed); best = None; slow = 0
     for t in range(tries):
         a, b, c = near[:], far[:], rest[:]
         rnd.shuffle(a); rnd.shuffle(b); rnd.shuffle(c)
-        if t % 3 == 1: pool = a + b + c
-        elif t % 3 == 2: pool = sorted(a + b, key=lambda _: rnd.random()) + c
-        else: pool = a + b + c
+        pool = (sorted(a + b, key=lambda _: rnd.random()) + c) if t % 3 == 2 else (a + b + c)
         pairs = pool[:32]
         if len(pairs) < 32: continue
-        ws = words(pairs)
-        if len(set(ws)) < N: continue
-        try:
-            out = subprocess.run([exe, str(n)] + ['%x' % w for w in ws], capture_output=True, text=True, timeout=15).stdout.split()
-        except subprocess.TimeoutExpired:
+        calls = run(pairs, 2)
+        if calls is None:
             slow += 1
-            if slow >= 4: return None        # the search at this depth is too slow to be replayed by the checker anyway
+            if slow >= 60 and best is None and t >= 60: break
             continue
-        if out and out[0] == 'false':
-            calls = int(out[1])
-            if best is None or calls < best[0]: best = (calls, pairs, ws)
-            if calls < 20000 and t >= 20: break
-    return best
+        if best is None or calls < best[0]: best = (calls, pairs)
+        if best[0] < good and t >= 20: break
+        if t >= 60 and best: break
+    if best is None: return None
+    t0 = time.time()
+    while best[0] > 250000 and time.time() - t0 < climb_seconds:      # only when the checker could not replay it
+        pairs = list(best[1]); i = rnd.randrange(32)
+        cand = rnd.choice(near if (near and rnd.random() < 0.7) else allp)
+        if cand in pairs: continue
+        pairs[i] = cand
+        calls = run(pairs, 1)
+        if calls is not None and calls < best[0]: best = (calls, pairs)
+    return (best[0], best[1], words(best[1]))
 
 def lean(step, stmt, expr, n, m, ws, gates):
     ns = step.replace('-', '_')
@@ -163,6 +178,8 @@ def main():
         m = len(gates); n = m - 2
         if n < 1: print('function too small for this method'); return 1
         best = samples(T, n)
+        if best and best[0] > 300000:
+            print(f'monotone size {m}: the best sample found needs {best[0]} search calls, too many for the checker'); return 1
         if best: break
         smaller = synth(m - 1, SYNTH_SECONDS)
         if not smaller or not check_circuit(T, smaller):
