@@ -88,7 +88,7 @@ def samples(T, n, tries=400, seed=1):
     near = [(p, q) for p in tr for q in fa if bin(p ^ q).count('1') == 1]
     far = [(p, q) for p in tr for q in fa if bin(p ^ q).count('1') == 2]
     rest = [(p, q) for p in tr for q in fa if bin(p ^ q).count('1') > 2]
-    rnd = random.Random(seed); best = None
+    rnd = random.Random(seed); best = None; slow = 0
     for t in range(tries):
         a, b, c = near[:], far[:], rest[:]
         rnd.shuffle(a); rnd.shuffle(b); rnd.shuffle(c)
@@ -99,7 +99,12 @@ def samples(T, n, tries=400, seed=1):
         if len(pairs) < 32: continue
         ws = words(pairs)
         if len(set(ws)) < N: continue
-        out = subprocess.run([exe, str(n)] + ['%x' % w for w in ws], capture_output=True, text=True, timeout=120).stdout.split()
+        try:
+            out = subprocess.run([exe, str(n)] + ['%x' % w for w in ws], capture_output=True, text=True, timeout=15).stdout.split()
+        except subprocess.TimeoutExpired:
+            slow += 1
+            if slow >= 4: return None        # the search at this depth is too slow to be replayed by the checker anyway
+            continue
         if out and out[0] == 'false':
             calls = int(out[1])
             if best is None or calls < best[0]: best = (calls, pairs, ws)
