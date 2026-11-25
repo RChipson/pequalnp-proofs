@@ -35,7 +35,9 @@ def search(R, C, K, vals, b, seconds, work):
         procs = []
         for p in range(nproc):
             seed += 1
-            procs.append(subprocess.Popen([exe, f'{work}/mat.txt', str(K), str(seed), '60000000', '1.5', '0.03', '50'],
+            # a fixed temperature and one aimed move in three did best in trials; the temperature varies a little by process
+            T = ['0.35', '0.3', '0.4'][p % 3]
+            procs.append(subprocess.Popen([exe, f'{work}/mat.txt', str(K), str(seed), '60000000', T, T, '50', '35'],
                                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True))
         found = None
         while procs and not found and time.time() < end + 60:
