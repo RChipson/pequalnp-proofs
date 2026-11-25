@@ -1,0 +1,828 @@
+def keyAt (i : Nat) : Nat :=
+  Nat.land (Nat.shiftRight (kc (i / 32)) (256 * (i % 32))) (2 ^ 256 - 1)
+def vrAt (i : Nat) : Nat := Nat.land (Nat.shiftRight cVR (8 * i)) 255
+def valAt (i : Nat) : Nat := vrAt i % 16
+def rankAt (i : Nat) : Nat := vrAt i / 16
+
+def slot1 (g : Nat) : Nat :=
+  Nat.shiftRight (hs1 (g % cP1 % 1024 / 64)) (10 * (g % cP1 % 1024 % 64)) % 1024
+def slot2 (g : Nat) : Nat :=
+  Nat.shiftRight (hs2 (g % cP2 % 1024 / 64)) (10 * (g % cP2 % 1024 % 64)) % 1024
+
+-- One more than the place of g in the table, zero when g is not in it.
+def look (g : Nat) : Nat :=
+  if slot1 g ≠ 0 ∧ slot1 g - 1 < cN ∧ keyAt (slot1 g - 1) = g then slot1 g
+  else if slot2 g ≠ 0 ∧ slot2 g - 1 < cN ∧ keyAt (slot2 g - 1) = g then slot2 g
+  else 0
+
+theorem look_spec (g : Nat) (h : look g ≠ 0) : look g - 1 < cN ∧ keyAt (look g - 1) = g := by
+  unfold look at h ⊢
+  split_ifs at h ⊢ with h1 h2
+  · exact ⟨h1.2.1, h1.2.2⟩
+  · exact ⟨h2.2.1, h2.2.2⟩
+  · exact absurd rfl h
+
+-- The proved bound of the function in block r, when it lies lower in the table.
+def ov (i T r : Nat) : Nat :=
+  if look (digw 256 r T) = 0 then 0
+  else if rankAt (look (digw 256 r T) - 1) < rankAt i then valAt (look (digw 256 r T) - 1) else 0
+
+theorem ov_le (i T r : Nat) : ov i T r ≤ 15 := by
+  unfold ov valAt
+  split_ifs <;> omega
+
+def nec (sens X : Nat) : Bool := !(Nat.beq (Nat.land (unionSep (PIl.erase X)) sens) sens)
+def v0 (T : Nat) : List Nat := PIl.filter (nec (sepv T))
+def lv0 (i T : Nat) : Nat := hor 256 (ov i T) 0 129 + RvOf 0 (v0 T)
+def rv0 (i T k : Nat) : Nat :=
+  k * cO + hor 256 (fun r => if ov i T r = 0 then 150 else 0) 0 129
+
+def rootTest (i k : Nat) : Bool :=
+  Nat.ble (v0 (pack (keyAt i))).length (k + 1) &&
+    (cmpX (rv0 i (pack (keyAt i)) k) (Nat.xor (lv0 i (pack (keyAt i))) cM) &&
+      search (pack (keyAt i)) (sepv (pack (keyAt i))) k (v0 (pack (keyAt i)))
+        (lv0 i (pack (keyAt i))) (rv0 i (pack (keyAt i)) k) 0)
+
+def chk (i : Nat) : Bool :=
+  !(Nat.beq (pack (keyAt i)) 0) && (!(Nat.beq (pack (keyAt i)) FU) &&
+    ((List.range 8).all (fun j => nec (sepv (pack (keyAt i))) (PIl.getD j 0) ||
+        Nat.beq (digw 256 (1 + j) (pack (keyAt i))) (keyAt i)) &&
+      (List.range (valAt i)).all (fun k => !(rootTest i k))))
+
+def PI (x : Nat) : Prop := x ∈ PIl
+
+def Bound (g V : Nat) : Prop :=
+  ∀ l : List Nat, Slp PI l → (PI (pack g) ∨ pack g ∈ l) → V ≤ l.length
+
+theorem pi_len : PIl.length = 8 := rfl
+theorem pi_bd_b : PIl.all (fun X => Nat.beq (Nat.land X FU) X) = true := by decide +kernel
+theorem pi_nodup : PIl.Nodup := by decide +kernel
+-- The truth tables of the eight inputs, and their packed words.
+def xt (j : Nat) : Nat := Nat.xor (2 ^ 256 - 1) (mi j)
+
+set_option maxRecDepth 100000 in
+theorem pk_b : (List.range 8).all (fun j => Nat.beq (pack (xt j)) (PIl.getD j 0)) = true := by
+  decide +kernel
+
+theorem dg_b : (List.range 129).all (fun r => PIl.all (fun X =>
+    Nat.beq (digw 256 r X) 0 || (Nat.beq (digw 256 r X) (2 ^ 256 - 1) ||
+      (List.range 8).any (fun j => Nat.beq (digw 256 r X) (xt j))))) = true := by
+  decide +kernel
+
+theorem irr_b : (List.range 8).all (fun j => Nat.beq (digw 256 (1 + j) (PIl.getD j 0)) 0) = true := by
+  decide +kernel
+
+theorem pi_bd (x : Nat) (h : PI x) : Bd x :=
+  Nat.eq_of_beq_eq_true (List.all_eq_true.1 pi_bd_b x h)
+
+theorem av_pr (r : Nat) (hr : r < 129) (X : Nat) (hX : X ∈ PIl) : Av PI (pr r X) := by
+  have := List.all_eq_true.1 (List.all_eq_true.1 dg_b r (List.mem_range.2 hr)) X hX
+  rw [Bool.or_eq_true, Bool.or_eq_true] at this
+  rcases this with h | h | h
+  · refine Or.inr (Or.inl ?_)
+    unfold pr
+    rw [Nat.eq_of_beq_eq_true h, pack_zero]
+  · refine Or.inr (Or.inr ?_)
+    unfold pr
+    rw [Nat.eq_of_beq_eq_true h, pack_full]
+  · obtain ⟨j, hj, hjd⟩ := List.any_eq_true.1 h
+    have hj8 : j < 8 := List.mem_range.1 hj
+    have hp := Nat.eq_of_beq_eq_true (List.all_eq_true.1 pk_b j hj)
+    refine Or.inl ?_
+    show pr r X ∈ PIl
+    unfold pr
+    rw [Nat.eq_of_beq_eq_true hjd, hp, List.getD_eq_getElem _ _ (by rw [pi_len]; exact hj8)]
+    exact List.getElem_mem _
+
+theorem cost_to_pi (r : Nat) (hr : r < 129) (S : Finset Nat) (hS : ∀ x ∈ S, x ∈ PIl) (y' q : Nat)
+    (hy' : proper y') (h : CostLe (Img (pr r) S) y' q) : CostLe PI y' q := by
+  obtain ⟨l, hl, hs, ht⟩ := h
+  have key : ∀ x, Img (pr r) S x → Av PI x := by
+    rintro x ⟨a, ha, hx⟩
+    rw [hx]
+    exact av_pr r hr a (hS a ha)
+  refine ⟨l, hl, slp_mono l _ _ key hs, ?_⟩
+  rcases ht with ht | ht
+  · rcases key _ ht with h0 | h0 | h0
+    · exact Or.inl h0
+    · exact absurd h0 hy'.1
+    · exact absurd h0 hy'.2
+  · exact Or.inr ht
+
+theorem digw_zero (w r : Nat) : digw w r 0 = 0 := by simp [digw]
+
+theorem digw_mul (c X : Nat) (h : ∀ r, c * digw 256 r X < 2 ^ 256) :
+    ∀ r, digw 256 r (c * X) = c * digw 256 r X := by
+  induction c with
+  | zero => intro r; simp [digw_zero]
+  | succ c ih =>
+    have h' : ∀ r, c * digw 256 r X < 2 ^ 256 := by
+      intro r
+      have := h r
+      rw [Nat.succ_mul] at this
+      omega
+    have ih' := ih h'
+    have side : ∀ r, digw 256 r (c * X) + digw 256 r X < 2 ^ 256 := by
+      intro r
+      rw [ih' r]
+      have := h r
+      rw [Nat.succ_mul] at this
+      exact this
+    intro r
+    rw [Nat.succ_mul, digw_add 256 _ _ side r, ih' r, Nat.succ_mul]
+
+theorem nbeq_ne {a b : Nat} (h : (!(Nat.beq a b)) = true) : a ≠ b := by
+  intro e
+  rw [e, Nat.beq_refl] at h
+  exact absurd h (by decide)
+
+theorem chk_parts (i : Nat) (h : chk i = true) :
+    pack (keyAt i) ≠ 0 ∧ pack (keyAt i) ≠ FU ∧
+    (∀ j, j < 8 → nec (sepv (pack (keyAt i))) (PIl.getD j 0) = true ∨
+      digw 256 (1 + j) (pack (keyAt i)) = keyAt i) ∧
+    (∀ k, k < valAt i → rootTest i k = false) := by
+  unfold chk at h
+  rw [Bool.and_eq_true, Bool.and_eq_true, Bool.and_eq_true] at h
+  obtain ⟨h1, h2, h3, h4⟩ := h
+  refine ⟨nbeq_ne h1, nbeq_ne h2, ?_, ?_⟩
+  · intro j hj
+    have := List.all_eq_true.1 h3 j (List.mem_range.2 hj)
+    rw [Bool.or_eq_true] at this
+    rcases this with h | h
+    · exact Or.inl h
+    · exact Or.inr (Nat.eq_of_beq_eq_true h)
+  · intro k hk
+    have := List.all_eq_true.1 h4 k (List.mem_range.2 hk)
+    cases hh : rootTest i k
+    · rfl
+    · rw [hh] at this; exact absurd this (by decide)
+
+theorem sig_big (r : Nat) (hr : 129 ≤ r) (S : Finset Nat) : sig r S = 0 := by
+  unfold sig
+  apply Finset.sum_eq_zero
+  intro x _
+  have h1 := ind_le x r
+  by_contra hc
+  have := (ind_one x r (by omega)).1
+  omega
+
+theorem sig_le_card (r : Nat) (S : Finset Nat) : sig r S ≤ S.card := by
+  unfold sig
+  calc ∑ x ∈ S, digw 256 r (ind x) ≤ ∑ _x ∈ S, 1 := Finset.sum_le_sum (fun x _ => ind_le x r)
+    _ = S.card := by simp
+
+theorem root_inv (hall : ∀ j, j < cN → chk j = true) (i : Nat)
+    (IH : ∀ j, j < cN → rankAt j < rankAt i → Bound (keyAt j) (valAt j))
+    (T : Nat) (S : Finset Nat) (hS : (v0 T).toFinset = S) (K : Nat) (hK : K ≤ 15) :
+    Inv T (fun r => r < 129 ∧ ov i T r ≠ 0) K S (lv0 i T) (rv0 i T K) := by
+  have hs := small256
+  have hv0n : (v0 T).Nodup := pi_nodup.filter _
+  have hv0l : (v0 T).length ≤ 8 := by
+    have := List.length_filter_le (nec (sepv T)) PIl
+    rw [pi_len] at this
+    exact this
+  have hSsub : ∀ x ∈ S, x ∈ PIl := by
+    intro x hx
+    rw [← hS] at hx
+    exact (List.mem_filter.1 (List.mem_toFinset.1 hx)).1
+  have hcard : S.card ≤ 8 := by
+    rw [← hS, List.toFinset_card_of_nodup hv0n]; exact hv0l
+  have eCC : ∀ r, digw 256 r (RvOf 0 (v0 T)) = sig r S := by
+    intro r
+    rw [dig_rvof (v0 T) 0 (fun r => by rw [digw_zero]; omega) r, digw_zero, Nat.zero_add]
+    unfold sig
+    rw [← hS, List.sum_toFinset _ hv0n]
+  have eH : ∀ r, digw 256 r (hor 256 (ov i T) 0 129) = if r < 129 then ov i T r else 0 := by
+    intro r
+    rw [digw_hor 256 _ (fun j => by have := ov_le i T j; omega)]
+    simp
+  have eL : ∀ r, digw 256 r (lv0 i T) = (if r < 129 then ov i T r else 0) + sig r S := by
+    intro r
+    unfold lv0
+    rw [digw_add 256 _ _ (fun r => by
+      rw [eH, eCC]
+      have := sig_le_card r S
+      have := ov_le i T r
+      split_ifs <;> omega) r, eH, eCC]
+  have eK : ∀ r, digw 256 r (K * cO) = if r < 129 then K else 0 := by
+    intro r
+    rw [digw_mul K cO (fun r => by rw [dig_cO]; split_ifs <;> omega) r, dig_cO]
+    split_ifs <;> simp
+  have eN : ∀ r, digw 256 r (hor 256 (fun r => if ov i T r = 0 then 150 else 0) 0 129) =
+      if r < 129 then (if ov i T r = 0 then 150 else 0) else 0 := by
+    intro r
+    rw [digw_hor 256 _ (fun j => by split_ifs <;> omega)]
+    simp
+  have eR : ∀ r, digw 256 r (rv0 i T K) =
+      (if r < 129 then K else 0) + (if r < 129 then (if ov i T r = 0 then 150 else 0) else 0) := by
+    intro r
+    unfold rv0
+    rw [digw_add 256 _ _ (fun r => by rw [eK, eN]; split_ifs <;> omega) r, eK, eN]
+  intro r
+  rw [eL, eR]
+  have hsc := sig_le_card r S
+  have hov := ov_le i T r
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · split_ifs <;> omega
+  · split_ifs <;> omega
+  · intro hr
+    rw [sig_big r hr S, ite_eq_right (by omega : ¬ r < 129)]
+  · intro hr hu
+    have h0 : ov i T r = 0 := by
+      by_contra hc
+      exact hu ⟨hr, hc⟩
+    rw [ite_eq_left hr, ite_eq_left hr, ite_eq_left h0]
+    omega
+  · rintro ⟨hr, hne⟩
+    have hl : look (digw 256 r T) ≠ 0 := by
+      intro e
+      apply hne
+      unfold ov
+      rw [ite_eq_left e]
+    have hrk : rankAt (look (digw 256 r T) - 1) < rankAt i := by
+      by_contra hc
+      apply hne
+      unfold ov
+      rw [ite_eq_right hl, ite_eq_right hc]
+    have hval : ov i T r = valAt (look (digw 256 r T) - 1) := by
+      unfold ov
+      rw [ite_eq_right hl, ite_eq_left hrk]
+    obtain ⟨hj, hkey⟩ := look_spec _ hl
+    have hB := IH _ hj hrk
+    obtain ⟨p0, p1, _, _⟩ := chk_parts _ (hall _ hj)
+    have hprT : pr r T = pack (keyAt (look (digw 256 r T) - 1)) := by
+      unfold pr
+      rw [hkey]
+    have hpy : proper (pr r T) := by
+      rw [hprT]; exact ⟨p0, p1⟩
+    refine ⟨hr, hpy, ov i T r, ?_, ?_⟩
+    · intro q hc
+      obtain ⟨l, hl', hs', ht'⟩ := cost_to_pi r hr S hSsub _ q hpy hc
+      rw [hprT] at ht'
+      have := hB l hs' ht'
+      rw [hval]
+      omega
+    · rw [ite_eq_left hr, ite_eq_left hr, ite_eq_right hne]
+      omega
+
+-- Every row of the table is a true lower bound, once every row passes its check.
+theorem bound_at (hall : ∀ j, j < cN → chk j = true) :
+    ∀ (n i : Nat), rankAt i = n → i < cN → Bound (keyAt i) (valAt i) := by
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro i hin hi
+    have IH : ∀ j, j < cN → rankAt j < rankAt i → Bound (keyAt j) (valAt j) :=
+      fun j hj hr => ih (rankAt j) (hin ▸ hr) j rfl hj
+    obtain ⟨p0, p1, pnd, proot⟩ := chk_parts i (hall i hi)
+    have hV15 : valAt i ≤ 15 := by unfold valAt; omega
+    generalize hT : pack (keyAt i) = T at p0 p1 pnd
+    have hy : proper T := ⟨p0, p1⟩
+    have aux : ∀ m, ∀ l : List Nat, l.length = m → Slp PI l → (PI T ∨ T ∈ l) → m < valAt i → False := by
+      intro m
+      induction m using Nat.strong_induction_on with
+      | _ m ihm =>
+        intro l hlm hs ht hmV
+        obtain ⟨steps, S, hlen, hsub, hval⟩ :=
+          extract T hy l PI PIl.toFinset (fun x => List.mem_toFinset) pi_bd hs ht
+        obtain ⟨l2, hl2, hv2, hcan, _⟩ :=
+          canon_exists T steps.length S PIl.toFinset hsub ⟨steps, rfl, hval⟩
+        have hSpi : ∀ x ∈ S, x ∈ PIl := fun x hx => List.mem_toFinset.1 (hsub hx)
+        by_cases hirr : ∃ X ∈ S, X ∉ v0 T
+        · obtain ⟨X, hXS, hXv⟩ := hirr
+          have hXpi := hSpi X hXS
+          obtain ⟨j, hj, hjX⟩ := List.mem_iff_getElem.1 hXpi
+          have hj8 : j < 8 := by rw [pi_len] at hj; exact hj
+          have hgd : PIl.getD j 0 = X := by
+            rw [List.getD_eq_getElem _ _ hj]; exact hjX
+          have hnec : nec (sepv T) X = false := by
+            cases hc : nec (sepv T) X
+            · rfl
+            · exact absurd (List.mem_filter.2 ⟨hXpi, hc⟩) hXv
+          have hdig : digw 256 (1 + j) T = keyAt i := by
+            rcases pnd j hj8 with h | h
+            · rw [hgd, hnec] at h; exact absurd h (by decide)
+            · exact h
+          have hr : 1 + j < 129 := by omega
+          have hprT : pr (1 + j) T = T := by
+            unfold pr
+            rw [hdig, hT]
+          have hprX : pr (1 + j) X = 0 := by
+            have := List.all_eq_true.1 irr_b j (List.mem_range.2 hj8)
+            rw [hgd] at this
+            unfold pr
+            rw [Nat.eq_of_beq_eq_true this, pack_zero]
+          obtain ⟨q, hq, hc⟩ := node_bound (pr (1 + j)) (homl_pr _) (pr_fu _ hr) T
+            (by rw [hprT]; exact hy) l2 S _ hsub hv2
+          have hcnt : 1 ≤ cnt (pr (1 + j)) S := by
+            classical
+            have h1 := Finset.single_le_sum
+              (f := fun x => if proper (pr (1 + j) x) then 0 else 1) (fun _ _ => Nat.zero_le _) hXS
+            have hnp : ¬ proper (pr (1 + j) X) := by
+              rw [hprX]; exact fun h => h.1 rfl
+            rw [ite_eq_right hnp] at h1
+            exact h1
+          rw [hprT] at hc
+          obtain ⟨l', hl', hs', ht'⟩ := cost_to_pi (1 + j) hr S hSpi T q hy hc
+          exact ihm l'.length (by omega) l' rfl hs' ht' (by omega)
+        · have hsubv : ∀ x ∈ S, x ∈ v0 T := by
+            intro x hx
+            by_contra hc
+            exact hirr ⟨x, hx, hc⟩
+          have hvsub : ∀ x ∈ v0 T, x ∈ S := by
+            intro X hX
+            by_contra hc
+            obtain ⟨hXpi, hnec⟩ := List.mem_filter.1 hX
+            have hcov : Nat.beq (Nat.land (unionSep (PIl.erase X)) (sepv T)) (sepv T) = true := by
+              apply cover_ok
+              intro n hn
+              obtain ⟨Z, hZ, hZn⟩ := valid_sep T l2 S _ hv2 n hn
+              have hne : Z ≠ X := fun e => hc (e ▸ hZ)
+              exact (mem_unionSep _ n).2 ⟨Z, (List.mem_erase_of_ne hne).2 (hSpi Z hZ), hZn⟩
+            unfold nec at hnec
+            rw [hcov] at hnec
+            exact absurd hnec (by decide)
+          have hfs : (v0 T).toFinset = S := by
+            ext x
+            rw [List.mem_toFinset]
+            exact ⟨hvsub x, hsubv x⟩
+          have hv0n : (v0 T).Nodup := pi_nodup.filter _
+          have hK : l2.length < valAt i := by omega
+          have hinv := root_inv hall i IH T S hfs l2.length (by omega)
+          have h0 : ∀ s ∈ l2.head?, 0 = s.1 ∨ 0 = s.2.1 ∨ 0 < s.2.2.1 := by
+            intro s hs
+            cases l2 with
+            | nil => simp at hs
+            | cons s0 r0 =>
+              have e : s = s0 := by simpa using hs.symm
+              subst e
+              obtain ⟨_, _, _, _, hr⟩ := (valid_cons T s r0 S _).1 hv2
+              have := valid_proper T hy r0 _ _ hr s.2.2.1 (Finset.mem_insert_self _ _)
+              exact Or.inr (Or.inr (Nat.pos_of_ne_zero this.1))
+          have hsr := search_sound T hy _ l2 S _ (v0 T) (lv0 i T) (rv0 i T l2.length) 0
+            hsub hv2 hcan h0 hv0n hfs hinv
+          have hcm := inv_cmp T _ l2 S _ _ _ hsub hv2 hinv
+          have hsz : (v0 T).length ≤ l2.length + 1 := by
+            have := valid_card T l2 S _ hsub hv2
+            rw [← hfs, List.toFinset_card_of_nodup hv0n] at this
+            exact this
+          have hrt : rootTest i l2.length = true := by
+            unfold rootTest
+            rw [hT, Bool.and_eq_true, Bool.and_eq_true]
+            exact ⟨Nat.ble_eq_true_of_le hsz, hcm, hsr⟩
+          rw [proot l2.length hK] at hrt
+          exact absurd hrt (by decide)
+    intro l hs ht
+    by_contra hlt
+    rw [hT] at ht
+    exact aux l.length l rfl hs ht (by omega)
+
+open PEqualNP.CircuitLowerBounds
+
+-- The words on the wires of a circuit, one bit for every sample row.
+def gv (w : List Nat) (g : Gate) : Nat :=
+  match g.op with
+  | .and => (g.inputs.map (fun i => w.getD i 0)).foldr (fun a b => a &&& b) FU
+  | .or => (g.inputs.map (fun i => w.getD i 0)).foldr (fun a b => a ||| b) 0
+  | .not => ((g.inputs.map (fun i => w.getD i 0)).headD 0) ^^^ FU
+  | _ => 0
+
+def execute (gs : List Gate) (w : List Nat) : List Nat :=
+  gs.foldl (fun l g => l ++ [gv l g]) w
+
+theorem FU_pow : FU = 2 ^ 33024 - 1 := by decide +kernel
+
+theorem fu_bit (s : Nat) (hs : s < 33024) : FU.testBit s = true := by
+  rw [FU_pow, Nat.testBit_two_pow_sub_one]
+  simpa using hs
+
+theorem bd_bit (a : Nat) (ha : Bd a) (s : Nat) (hs : 33024 ≤ s) : a.testBit s = false := by
+  have := congrArg (fun t => t.testBit s) ha
+  simp only [Nat.testBit_and] at this
+  rw [← this, FU_pow, Nat.testBit_two_pow_sub_one]
+  simp
+  omega
+
+theorem b_read (s : Nat) (w : List Nat) (j : Nat) :
+    (w.map (fun a => a.testBit s)).getD j false = (w.getD j 0).testBit s := by
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_map]
+  cases w[j]? with
+  | none => exact (Nat.zero_testBit s).symm
+  | some a => rfl
+
+theorem gv_bit (s : Nat) (hs : s < 33024) (g : Gate) (w : List Nat)
+    (hg : g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp)) :
+    (gv w g).testBit s =
+      g.op.eval (g.inputs.map fun j => (w.map (fun a => a.testBit s)).getD j false) := by
+  obtain ⟨o, l⟩ := g
+  simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hg
+  simp only [b_read]
+  rcases hg with rfl | rfl | rfl
+  · induction l with
+    | nil => exact fu_bit s hs
+    | cons a l ih =>
+      show (w.getD a 0 &&& _).testBit s = (_ && _)
+      rw [Nat.testBit_and]
+      exact congrArg (fun x => (w.getD a 0).testBit s && x) ih
+  · induction l with
+    | nil => exact Nat.zero_testBit s
+    | cons a l ih =>
+      show (w.getD a 0 ||| _).testBit s = (_ || _)
+      rw [Nat.testBit_or]
+      exact congrArg (fun x => (w.getD a 0).testBit s || x) ih
+  · cases l with
+    | nil =>
+      show ((0 : Nat) ^^^ FU).testBit s = !false
+      rw [Nat.testBit_xor, Nat.zero_testBit, fu_bit s hs]
+      rfl
+    | cons a l =>
+      show (w.getD a 0 ^^^ FU).testBit s = !((w.getD a 0).testBit s)
+      rw [Nat.testBit_xor, fu_bit s hs]
+      cases (w.getD a 0).testBit s <;> rfl
+
+theorem execute_bits (s : Nat) (hs : s < 33024) : ∀ (gs : List Gate) (w : List Nat),
+    (∀ g ∈ gs, g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp)) →
+    (execute gs w).map (fun a => a.testBit s) =
+      gs.foldl (fun (l : List Bool) g => l ++ [g.op.eval (g.inputs.map fun j => l.getD j false)])
+        (w.map (fun a => a.testBit s))
+  | [], _, _ => rfl
+  | g :: gs, w, hg => by
+      show (execute gs (w ++ [gv w g])).map _ = _
+      rw [execute_bits s hs gs _ (fun a ha => hg a (by simp [ha]))]
+      simp only [List.foldl_cons, List.map_append, List.map_singleton,
+        gv_bit s hs g w (hg g (by simp))]
+
+theorem av_get (w : List Nat) (i : Nat) : Av (fun x => x ∈ w) (w.getD i 0) := by
+  simp only [List.getD_eq_getElem?_getD]
+  cases h : w[i]? with
+  | none => exact Or.inr (Or.inl rfl)
+  | some a => exact Or.inl (List.mem_of_getElem? h)
+
+theorem bd_get (w : List Nat) (hw : ∀ x ∈ w, Bd x) (i : Nat) : Bd (w.getD i 0) := by
+  rcases av_get w i with h | h | h
+  · exact hw _ h
+  · rw [h]; exact bd_zero
+  · rw [h]; exact bd_fu
+
+-- A legal gate is one step of a straight-line program.
+theorem gv_step (w : List Nat) (hw : ∀ x ∈ w, Bd x) (g : Gate)
+    (h : g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2) :
+    ∃ a b, Av (fun x => x ∈ w) a ∧ Av (fun x => x ∈ w) b ∧
+      (gv w g = a &&& b ∨ gv w g = a ||| b ∨ gv w g = a ^^^ FU) := by
+  obtain ⟨o, l⟩ := g
+  simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at h
+  obtain ⟨ho, hl⟩ := h
+  have z0 : Av (fun x => x ∈ w) 0 := Or.inr (Or.inl rfl)
+  have z1 : Av (fun x => x ∈ w) FU := Or.inr (Or.inr rfl)
+  cases l with
+  | nil =>
+    rcases ho with rfl | rfl | rfl
+    · exact ⟨FU, FU, z1, z1, Or.inl (Nat.and_self FU).symm⟩
+    · exact ⟨0, 0, z0, z0, Or.inr (Or.inl (Nat.or_self 0).symm)⟩
+    · exact ⟨0, 0, z0, z0, Or.inr (Or.inr rfl)⟩
+  | cons i l =>
+    cases l with
+    | nil =>
+      rcases ho with rfl | rfl | rfl
+      · exact ⟨w.getD i 0, FU, av_get w i, z1, Or.inl rfl⟩
+      · exact ⟨w.getD i 0, 0, av_get w i, z0, Or.inr (Or.inl rfl)⟩
+      · exact ⟨w.getD i 0, 0, av_get w i, z0, Or.inr (Or.inr rfl)⟩
+    | cons j l =>
+      cases l with
+      | cons a l => simp at hl
+      | nil =>
+        rcases ho with rfl | rfl | rfl
+        · refine ⟨w.getD i 0, w.getD j 0, av_get w i, av_get w j, Or.inl ?_⟩
+          show w.getD i 0 &&& (w.getD j 0 &&& FU) = _
+          rw [show w.getD j 0 &&& FU = w.getD j 0 from bd_get w hw j]
+        · refine ⟨w.getD i 0, w.getD j 0, av_get w i, av_get w j, Or.inr (Or.inl ?_)⟩
+          show w.getD i 0 ||| (w.getD j 0 ||| 0) = _
+          rw [Nat.or_zero]
+        · exact ⟨w.getD i 0, 0, av_get w i, z0, Or.inr (Or.inr rfl)⟩
+
+theorem execute_slp : ∀ (gs : List Gate) (w : List Nat),
+    (∀ g ∈ gs, g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2) →
+    (∀ x ∈ w, Bd x) →
+    ∃ zs : List Nat, execute gs w = w ++ zs ∧ zs.length = gs.length ∧ Slp (fun x => x ∈ w) zs ∧
+      (∀ x ∈ zs, Bd x)
+  | [], w, _, _ => ⟨[], by simp [execute], rfl, trivial, fun x hx => by simp at hx⟩
+  | g :: gs, w, hg, hw => by
+      have hstep := gv_step w hw g (hg g (by simp))
+      have hbz : Bd (gv w g) := step_bd _ hw _ hstep
+      have hw' : ∀ x ∈ w ++ [gv w g], Bd x := by
+        intro x hx
+        rcases List.mem_append.1 hx with h | h
+        · exact hw x h
+        · rw [List.mem_singleton] at h; rw [h]; exact hbz
+      obtain ⟨zs, he, hl, hs, hb⟩ := execute_slp gs (w ++ [gv w g]) (fun a ha => hg a (by simp [ha])) hw'
+      refine ⟨gv w g :: zs, ?_, by simp [hl], ⟨hstep, ?_⟩, ?_⟩
+      · show execute gs (w ++ [gv w g]) = _
+        rw [he]; simp
+      · refine slp_mono zs _ _ ?_ hs
+        intro x hx
+        rcases List.mem_append.1 hx with h | h
+        · exact Or.inl (Or.inr h)
+        · rw [List.mem_singleton] at h; exact Or.inl (Or.inl h)
+      · intro x hx
+        rcases List.mem_cons.1 hx with h | h
+        · rw [h]; exact hbz
+        · exact hb x h
+
+theorem pi_id : List.ofFn (fun j : Fin 8 => PIl.getD j.val 0) = PIl := by rfl
+
+-- A circuit for a function whose rows are those of the word T yields a program for T.
+theorem circuit_slp (f : (Fin 8 → Bool) → Bool) (T : Nat) (hT : proper T) (hTb : Bd T)
+    (hf : ∀ s, s < 33024 → f (fun j => (PIl.getD j.val 0).testBit s) = T.testBit s)
+    (C : Circuit) (hC : PEqualNP.MetaComplexity.FanInTwo C)
+    (he : ∀ x : Fin 8 → Bool, C.eval (List.ofFn x) = f x) :
+    ∃ zs : List Nat, zs.length = C.size ∧ Slp PI zs ∧ (PI T ∨ T ∈ zs) := by
+  obtain ⟨zs, hex, hl, hs, hb⟩ := execute_slp C.gates PIl hC pi_bd
+  have hbd : ∀ x ∈ execute C.gates PIl, Bd x := by
+    intro x hx
+    rw [hex] at hx
+    rcases List.mem_append.1 hx with h | h
+    · exact pi_bd x h
+    · exact hb x h
+  have hout : (execute C.gates PIl).getD C.output 0 = T := by
+    apply Nat.eq_of_testBit_eq
+    intro s
+    by_cases hs' : s < 33024
+    · rw [← b_read, execute_bits s hs' C.gates PIl (fun g hg => (hC g hg).1)]
+      have e := he (fun j => (PIl.getD j.val 0).testBit s)
+      rw [hf s hs'] at e
+      have e2 : List.ofFn (fun j : Fin 8 => (PIl.getD j.val 0).testBit s) =
+          PIl.map (fun a => a.testBit s) := by
+        calc List.ofFn (fun j : Fin 8 => (PIl.getD j.val 0).testBit s)
+            = (List.ofFn (fun j : Fin 8 => PIl.getD j.val 0)).map (fun a => a.testBit s) := by
+              rw [List.map_ofFn]; rfl
+          _ = _ := by rw [pi_id]
+      rw [e2] at e
+      exact e
+    · rw [bd_bit _ (bd_get _ hbd _) s (by omega), bd_bit T hTb s (by omega)]
+  have hmem : T ∈ execute C.gates PIl := by
+    rcases av_get (execute C.gates PIl) C.output with h | h | h
+    · rw [hout] at h; exact h
+    · rw [hout] at h; exact absurd h hT.1
+    · rw [hout] at h; exact absurd h hT.2
+  refine ⟨zs, hl, hs, ?_⟩
+  rw [hex] at hmem
+  rcases List.mem_append.1 hmem with h | h
+  · exact Or.inl h
+  · exact Or.inr h
+
+-- A heavy row is checked in pieces: one piece for every first gate of its longest search.
+def pairsOf : List Nat → List (Nat × Nat)
+  | [] => []
+  | a :: r => r.map (fun b => (a, b)) ++ pairsOf r
+
+theorem scanPairs_eq (p : Nat → Nat → Bool) :
+    ∀ v : List Nat, scanPairs p v = (pairsOf v).any (fun q => p q.1 q.2)
+  | [] => rfl
+  | a :: r => by
+      show (r.any (p a) || scanPairs p r) = ((r.map (fun b => (a, b)) ++ pairsOf r).any _)
+      rw [List.any_append, List.any_map, scanPairs_eq p r]
+      rfl
+
+theorem any_false_of_get {α : Type} (l : List α) (d : α) (f : α → Bool)
+    (h : ∀ m, m < l.length → f (l.getD m d) = false) : l.any f = false := by
+  cases hh : l.any f
+  · rfl
+  · obtain ⟨x, hx, hfx⟩ := List.any_eq_true.1 hh
+    obtain ⟨m, hm, e⟩ := List.mem_iff_getElem.1 hx
+    have := h m hm
+    rw [List.getD_eq_getElem _ _ hm, e, hfx] at this
+    exact absurd this (by decide)
+
+def cuAt (i k a : Nat) : Bool :=
+  cand (search (pack (keyAt i)) (sepv (pack (keyAt i))) k) k (sepv (pack (keyAt i)))
+    (v0 (pack (keyAt i))).length (v0 (pack (keyAt i))) (coverage (v0 (pack (keyAt i))))
+    (lv0 i (pack (keyAt i))) (rv0 i (pack (keyAt i)) (k + 1)) 0 a a (Nat.xor a FU) true
+
+def cbAt (i k a b : Nat) : Bool → Bool
+  | false => cand (search (pack (keyAt i)) (sepv (pack (keyAt i))) k) k (sepv (pack (keyAt i)))
+      (v0 (pack (keyAt i))).length (v0 (pack (keyAt i))) (coverage (v0 (pack (keyAt i))))
+      (lv0 i (pack (keyAt i))) (rv0 i (pack (keyAt i)) (k + 1)) 0 a b (Nat.land a b) false
+  | true => cand (search (pack (keyAt i)) (sepv (pack (keyAt i))) k) k (sepv (pack (keyAt i)))
+      (v0 (pack (keyAt i))).length (v0 (pack (keyAt i))) (coverage (v0 (pack (keyAt i))))
+      (lv0 i (pack (keyAt i))) (rv0 i (pack (keyAt i)) (k + 1)) 0 a b (Nat.lor a b) false
+
+def pieceU (i k m : Nat) : Bool := !(cuAt i k ((v0 (pack (keyAt i))).getD m 0))
+
+def pieceB (i k m : Nat) (o : Bool) : Bool :=
+  !(cbAt i k ((pairsOf (v0 (pack (keyAt i)))).getD m (0, 0)).1
+    ((pairsOf (v0 (pack (keyAt i)))).getD m (0, 0)).2 o)
+
+theorem not_true_false {b : Bool} (h : (!b) = true) : b = false := by
+  cases b
+  · rfl
+  · exact absurd h (by decide)
+
+theorem root_split (i k : Nat)
+    (hu : ∀ m, m < (v0 (pack (keyAt i))).length → pieceU i k m = true)
+    (hb : ∀ m, m < (pairsOf (v0 (pack (keyAt i)))).length → ∀ o, pieceB i k m o = true) :
+    rootTest i (k + 1) = false := by
+  have hs : search (pack (keyAt i)) (sepv (pack (keyAt i))) (k + 1) (v0 (pack (keyAt i)))
+      (lv0 i (pack (keyAt i))) (rv0 i (pack (keyAt i)) (k + 1)) 0 = false := by
+    rw [search_succ, scanPairs_eq, Bool.or_eq_false_iff]
+    constructor
+    · exact any_false_of_get _ 0 _ (fun m hm => not_true_false (hu m hm))
+    · refine any_false_of_get _ (0, 0) _ (fun m hm => ?_)
+      rw [Bool.or_eq_false_iff]
+      exact ⟨not_true_false (hb m hm false), not_true_false (hb m hm true)⟩
+  unfold rootTest
+  rw [hs, Bool.and_false, Bool.and_false]
+
+def chkL (i K : Nat) : Bool :=
+  !(Nat.beq (pack (keyAt i)) 0) && (!(Nat.beq (pack (keyAt i)) FU) &&
+    ((List.range 8).all (fun j => nec (sepv (pack (keyAt i))) (PIl.getD j 0) ||
+        Nat.beq (digw 256 (1 + j) (pack (keyAt i))) (keyAt i)) &&
+      (List.range (valAt i)).all (fun k => Nat.beq k K || !(rootTest i k))))
+
+theorem chk_of_light (i K : Nat) (h1 : chkL i K = true) (h2 : rootTest i K = false) :
+    chk i = true := by
+  unfold chkL at h1
+  unfold chk
+  rw [Bool.and_eq_true, Bool.and_eq_true, Bool.and_eq_true] at h1 ⊢
+  obtain ⟨a1, a2, a3, a4⟩ := h1
+  refine ⟨a1, a2, a3, ?_⟩
+  rw [List.all_eq_true] at a4 ⊢
+  intro k hk
+  have := a4 k hk
+  rw [Bool.or_eq_true] at this
+  rcases this with h | h
+  · rw [Nat.eq_of_beq_eq_true h, h2]; rfl
+  · exact h
+
+def allFrom (f : Nat → Bool) : Nat → Nat → Bool
+  | 0, _ => true
+  | n + 1, o => f o && allFrom f n (o + 1)
+
+theorem allFrom_ok (f : Nat → Bool) : ∀ (n o : Nat), allFrom f n o = true →
+    ∀ i, o ≤ i → i < o + n → f i = true
+  | 0, o, _, i, h1, h2 => by omega
+  | n + 1, o, h, i, h1, h2 => by
+      have h' : (f o && allFrom f n (o + 1)) = true := h
+      rw [Bool.and_eq_true] at h'
+      by_cases e : i = o
+      · rw [e]; exact h'.1
+      · exact allFrom_ok f n (o + 1) h'.2 i (by omega) (by omega)
+
+-- A search state: the live words, the two counter words, the last gate output.
+abbrev St := List Nat × Nat × Nat × Nat
+
+def tests (v : List Nat) : List (Nat × Nat × Nat × Bool) :=
+  v.map (fun a => (a, a, Nat.xor a FU, true)) ++
+    (pairsOf v).flatMap (fun q =>
+      [(q.1, q.2, Nat.land q.1 q.2, false), (q.1, q.2, Nat.lor q.1 q.2, false)])
+
+def candT (y sens k : Nat) (st : St) (t : Nat × Nat × Nat × Bool) : Bool :=
+  cand (search y sens k) k sens st.1.length st.1 (coverage st.1) st.2.1 st.2.2.1 st.2.2.2
+    t.1 t.2.1 t.2.2.1 t.2.2.2
+
+theorem search_tests (y sens k : Nat) (st : St) :
+    search y sens (k + 1) st.1 st.2.1 st.2.2.1 st.2.2.2 = (tests st.1).any (candT y sens k st) := by
+  rw [search_succ, scanPairs_eq]
+  unfold tests
+  rw [List.any_append, List.any_map, List.any_flatMap]
+  simp only [List.any_cons, List.any_nil, Bool.or_false]
+  rfl
+
+def delOf (d a b : Nat) : List Nat :=
+  if d = 0 then [] else if d = 1 then [a] else if d = 2 then [b] else [a, b]
+
+def covOf (d : Nat) (cov : Nat × Nat × Nat) (a b : Nat) : Nat :=
+  if d = 0 then cov.1 else if d = 1 then takeOne cov (sepv a)
+  else if d = 2 then takeOne cov (sepv b) else takeTwo cov (sepv a) (sepv b)
+
+-- One way to dispose of the operands of a gate; never the last two ways for a NOT gate.
+def tryT (y sens k : Nat) (st : St) (t : Nat × Nat × Nat × Bool) (d : Nat) : Bool :=
+  !(Nat.ble 2 d && t.2.2.2) &&
+    tryC (search y sens k) k sens st.1.length st.1 (delOf d t.1 t.2.1)
+      (st.2.1 + flag (ncb t.2.2.1 t.1 t.2.1) + ind t.2.2.1) st.2.2.1
+      (Nat.xor (st.2.1 + flag (ncb t.2.2.1 t.1 t.2.1) + ind t.2.2.1) cM)
+      (Nat.lor (covOf d (coverage st.1) t.1 t.2.1) (sepv t.2.2.1)) t.2.2.1
+
+theorem cand_tries' (rec : List Nat → Nat → Nat → Nat → Bool) (k sens n : Nat) (v : List Nat)
+    (cov : Nat × Nat × Nat) (Lv Rv prev a b g : Nat) (un : Bool)
+    (h0 : tryC rec k sens n v [] (Lv + flag (ncb g a b) + ind g) Rv
+      (Nat.xor (Lv + flag (ncb g a b) + ind g) cM) (Nat.lor cov.1 (sepv g)) g = false)
+    (h1 : tryC rec k sens n v [a] (Lv + flag (ncb g a b) + ind g) Rv
+      (Nat.xor (Lv + flag (ncb g a b) + ind g) cM) (Nat.lor (takeOne cov (sepv a)) (sepv g)) g = false)
+    (h23 : un = false → (tryC rec k sens n v [b] (Lv + flag (ncb g a b) + ind g) Rv
+        (Nat.xor (Lv + flag (ncb g a b) + ind g) cM) (Nat.lor (takeOne cov (sepv b)) (sepv g)) g = false ∧
+      tryC rec k sens n v [a, b] (Lv + flag (ncb g a b) + ind g) Rv
+        (Nat.xor (Lv + flag (ncb g a b) + ind g) cM)
+        (Nat.lor (takeTwo cov (sepv a) (sepv b)) (sepv g)) g = false)) :
+    cand rec k sens n v cov Lv Rv prev a b g un = false := by
+  unfold cand
+  rw [h0, h1]
+  cases un
+  · rw [(h23 rfl).1, (h23 rfl).2]
+    simp only [Bool.or_self, Bool.and_false]
+  · simp only [Bool.not_true, Bool.false_and, Bool.or_self, Bool.and_false]
+
+theorem del0 (a b : Nat) : delOf 0 a b = [] := rfl
+theorem del1 (a b : Nat) : delOf 1 a b = [a] := rfl
+theorem del2 (a b : Nat) : delOf 2 a b = [b] := rfl
+theorem del3 (a b : Nat) : delOf 3 a b = [a, b] := rfl
+theorem cov0 (c : Nat × Nat × Nat) (a b : Nat) : covOf 0 c a b = c.1 := rfl
+theorem cov1 (c : Nat × Nat × Nat) (a b : Nat) : covOf 1 c a b = takeOne c (sepv a) := rfl
+theorem cov2 (c : Nat × Nat × Nat) (a b : Nat) : covOf 2 c a b = takeOne c (sepv b) := rfl
+theorem cov3 (c : Nat × Nat × Nat) (a b : Nat) : covOf 3 c a b = takeTwo c (sepv a) (sepv b) := rfl
+theorem ble20 : Nat.ble 2 0 = false := rfl
+theorem ble21 : Nat.ble 2 1 = false := rfl
+theorem ble22 : Nat.ble 2 2 = true := rfl
+theorem ble23 : Nat.ble 2 3 = true := rfl
+
+theorem tryT_eq (y sens k : Nat) (st : St) (a b g : Nat) (un : Bool) (d : Nat) :
+    tryT y sens k st (a, b, g, un) d = (!(Nat.ble 2 d && un) &&
+      tryC (search y sens k) k sens st.1.length st.1 (delOf d a b)
+        (st.2.1 + flag (ncb g a b) + ind g) st.2.2.1
+        (Nat.xor (st.2.1 + flag (ncb g a b) + ind g) cM)
+        (Nat.lor (covOf d (coverage st.1) a b) (sepv g)) g) := rfl
+
+theorem cand_tries (y sens k : Nat) (st : St) (t : Nat × Nat × Nat × Bool)
+    (h : ∀ d, d < 4 → tryT y sens k st t d = false) : candT y sens k st t = false := by
+  have h0 := h 0 (by norm_num)
+  have h1 := h 1 (by norm_num)
+  have h2 := h 2 (by norm_num)
+  have h3 := h 3 (by norm_num)
+  obtain ⟨a, b, g, un⟩ := t
+  rw [tryT_eq, ble20, Bool.false_and, Bool.not_false, Bool.true_and, del0, cov0] at h0
+  rw [tryT_eq, ble21, Bool.false_and, Bool.not_false, Bool.true_and, del1, cov1] at h1
+  rw [tryT_eq, ble22, Bool.true_and, del2, cov2] at h2
+  rw [tryT_eq, ble23, Bool.true_and, del3, cov3] at h3
+  have key := cand_tries' (search y sens k) k sens st.1.length st.1 (coverage st.1) st.2.1 st.2.2.1
+    st.2.2.2 a b g un h0 h1 (fun e => by
+      rw [e, Bool.not_false, Bool.true_and] at h2 h3
+      exact ⟨h2, h3⟩)
+  exact key
+
+def kid (st : St) (t : Nat × Nat × Nat × Bool) (d : Nat) : St :=
+  (t.2.2.1 :: dropped (delOf d t.1 t.2.1) st.1,
+    st.2.1 + flag (ncb t.2.2.1 t.1 t.2.1) + ind t.2.2.1,
+    RvOf st.2.2.1 (delOf d t.1 t.2.1), t.2.2.1)
+
+theorem try_kid (y sens k : Nat) (st : St) (t : Nat × Nat × Nat × Bool) (d : Nat)
+    (h : search y sens k (kid st t d).1 (kid st t d).2.1 (kid st t d).2.2.1 (kid st t d).2.2.2 = false) :
+    tryT y sens k st t d = false := by
+  unfold tryT tryC
+  have h' : search y sens k (t.2.2.1 :: dropped (delOf d t.1 t.2.1) st.1)
+      (st.2.1 + flag (ncb t.2.2.1 t.1 t.2.1) + ind t.2.2.1)
+      (RvOf st.2.2.1 (delOf d t.1 t.2.1)) t.2.2.1 = false := h
+  rw [h', Bool.and_false, Bool.and_false, Bool.and_false, Bool.and_false]
+
+def restOK (y sens k : Nat) (st : St) (skip : List Nat) : Bool :=
+  (List.range (tests st.1).length).all (fun idx =>
+    skip.contains idx || !(candT y sens k st ((tests st.1).getD idx (0, 0, 0, false))))
+
+theorem node_false (y sens k : Nat) (st : St) (skip : List Nat)
+    (h1 : restOK y sens k st skip = true)
+    (h2 : ∀ idx, idx ∈ skip → candT y sens k st ((tests st.1).getD idx (0, 0, 0, false)) = false) :
+    search y sens (k + 1) st.1 st.2.1 st.2.2.1 st.2.2.2 = false := by
+  rw [search_tests]
+  refine any_false_of_get _ (0, 0, 0, false) _ (fun m hm => ?_)
+  have := List.all_eq_true.1 h1 m (List.mem_range.2 hm)
+  rw [Bool.or_eq_true] at this
+  rcases this with h | h
+  · exact h2 m (by simpa using h)
+  · exact not_true_false h
+
+-- The states of row i at level K, by the path of (test, disposal) choices, last choice first.
+def stPath (i K : Nat) : List (Nat × Nat) → St
+  | [] => (v0 (pack (keyAt i)), lv0 i (pack (keyAt i)), rv0 i (pack (keyAt i)) K, 0)
+  | q :: p => kid (stPath i K p) ((tests (stPath i K p).1).getD q.1 (0, 0, 0, false)) q.2
+
+def sS (i K : Nat) (p : List (Nat × Nat)) (k : Nat) : Bool :=
+  search (pack (keyAt i)) (sepv (pack (keyAt i))) k (stPath i K p).1 (stPath i K p).2.1
+    (stPath i K p).2.2.1 (stPath i K p).2.2.2
+
+def cT (i K : Nat) (p : List (Nat × Nat)) (k idx : Nat) : Bool :=
+  candT (pack (keyAt i)) (sepv (pack (keyAt i))) k (stPath i K p)
+    ((tests (stPath i K p).1).getD idx (0, 0, 0, false))
+
+def tT (i K : Nat) (p : List (Nat × Nat)) (k idx d : Nat) : Bool :=
+  tryT (pack (keyAt i)) (sepv (pack (keyAt i))) k (stPath i K p)
+    ((tests (stPath i K p).1).getD idx (0, 0, 0, false)) d
+
+def rO (i K : Nat) (p : List (Nat × Nat)) (k : Nat) (skip : List Nat) : Bool :=
+  restOK (pack (keyAt i)) (sepv (pack (keyAt i))) k (stPath i K p) skip
+
+theorem sS_of (i K : Nat) (p : List (Nat × Nat)) (k : Nat) (skip : List Nat)
+    (h1 : rO i K p k skip = true) (h2 : ∀ idx, idx ∈ skip → cT i K p k idx = false) :
+    sS i K p (k + 1) = false :=
+  node_false _ _ k (stPath i K p) skip h1 h2
+
+theorem cT_of (i K : Nat) (p : List (Nat × Nat)) (k idx : Nat)
+    (h : ∀ d, d < 4 → tT i K p k idx d = false) : cT i K p k idx = false :=
+  cand_tries _ _ k (stPath i K p) _ h
+
+theorem tT_of (i K : Nat) (p : List (Nat × Nat)) (k idx d : Nat)
+    (h : sS i K ((idx, d) :: p) k = false) : tT i K p k idx d = false :=
+  try_kid _ _ k (stPath i K p) _ d h
+
+theorem root_of (i K : Nat) (h : sS i K [] K = false) : rootTest i K = false := by
+  unfold rootTest
+  have h' : search (pack (keyAt i)) (sepv (pack (keyAt i))) K (v0 (pack (keyAt i)))
+      (lv0 i (pack (keyAt i))) (rv0 i (pack (keyAt i)) K) 0 = false := h
+  rw [h', Bool.and_false, Bool.and_false]

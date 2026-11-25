@@ -1,0 +1,1864 @@
+def proper (a : Nat) : Prop := a ≠ 0 ∧ a ≠ FU
+
+def Bd (a : Nat) : Prop := a &&& FU = a
+
+def Av (A : Nat → Prop) (a : Nat) : Prop := A a ∨ a = 0 ∨ a = FU
+
+-- A straight-line program over the available words: every new word is one gate away.
+def Slp : (Nat → Prop) → List Nat → Prop
+  | _, [] => True
+  | A, z :: l => (∃ a b, Av A a ∧ Av A b ∧ (z = a &&& b ∨ z = a ||| b ∨ z = a ^^^ FU)) ∧
+      Slp (fun x => x = z ∨ A x) l
+
+theorem slp_mono : ∀ (l : List Nat) (A B : Nat → Prop), (∀ x, A x → Av B x) → Slp A l → Slp B l
+  | [], _, _, _, _ => trivial
+  | z :: l, A, B, h, hs => by
+      obtain ⟨⟨a, b, ha, hb, hz⟩, ht⟩ := hs
+      have av : ∀ x, Av A x → Av B x := by
+        intro x hx
+        rcases hx with hx | hx | hx
+        · exact h x hx
+        · exact Or.inr (Or.inl hx)
+        · exact Or.inr (Or.inr hx)
+      refine ⟨⟨a, b, av a ha, av b hb, hz⟩, slp_mono l _ _ ?_ ht⟩
+      intro x hx
+      rcases hx with hx | hx
+      · exact Or.inl (Or.inl hx)
+      · rcases h x hx with h1 | h1 | h1
+        · exact Or.inl (Or.inr h1)
+        · exact Or.inr (Or.inl h1)
+        · exact Or.inr (Or.inr h1)
+
+theorem bd_zero : Bd 0 := by simp [Bd]
+theorem bd_fu : Bd FU := by simp [Bd]
+theorem bd_and {a b : Nat} (ha : Bd a) : Bd (a &&& b) := by
+  unfold Bd at *
+  rw [Nat.and_right_comm, ha]
+theorem bd_or {a b : Nat} (ha : Bd a) (hb : Bd b) : Bd (a ||| b) := by
+  unfold Bd at *
+  rw [Nat.and_or_distrib_right, ha, hb]
+theorem bd_neg {a : Nat} (ha : Bd a) : Bd (a ^^^ FU) := by
+  unfold Bd at *
+  rw [Nat.and_xor_distrib_right, ha, Nat.and_self]
+
+theorem bd_or_fu {a : Nat} (ha : Bd a) : a ||| FU = FU := by
+  unfold Bd at ha
+  apply Nat.eq_of_testBit_eq
+  intro i
+  have h := congrArg (fun t => t.testBit i) ha
+  simp only [Nat.testBit_and] at h
+  rw [Nat.testBit_or]
+  cases h1 : a.testBit i <;> cases h2 : FU.testBit i <;> simp_all
+
+theorem bd_fu_and {a : Nat} (ha : Bd a) : FU &&& a = a := by
+  unfold Bd at ha; rw [Nat.and_comm]; exact ha
+
+theorem step_bd (A : Nat → Prop) (hA : ∀ x, A x → Bd x) (z : Nat)
+    (h : ∃ a b, Av A a ∧ Av A b ∧ (z = a &&& b ∨ z = a ||| b ∨ z = a ^^^ FU)) : Bd z := by
+  have av : ∀ x, Av A x → Bd x := by
+    intro x hx
+    rcases hx with hx | rfl | rfl
+    · exact hA x hx
+    · exact bd_zero
+    · exact bd_fu
+  obtain ⟨a, b, ha, hb, rfl | rfl | rfl⟩ := h
+  · exact bd_and (av a ha)
+  · exact bd_or (av a ha) (av b hb)
+  · exact bd_neg (av a ha)
+
+theorem av_cases {A : Nat → Prop} {a : Nat} (h : Av A a) : a = 0 ∨ a = FU ∨ (A a ∧ proper a) := by
+  by_cases h0 : a = 0
+  · exact Or.inl h0
+  by_cases h1 : a = FU
+  · exact Or.inr (Or.inl h1)
+  rcases h with h | h | h
+  · exact Or.inr (Or.inr ⟨h, h0, h1⟩)
+  · exact absurd h h0
+  · exact absurd h h1
+
+-- A new word is a constant, an old word, or a genuine gate on two proper old words.
+theorem step_cases (A : Nat → Prop) (hA : ∀ x, A x → Bd x) (z : Nat)
+    (h : ∃ a b, Av A a ∧ Av A b ∧ (z = a &&& b ∨ z = a ||| b ∨ z = a ^^^ FU)) :
+    Av A z ∨ (∃ a b, A a ∧ A b ∧ proper a ∧ proper b ∧
+      ((a ≠ b ∧ (z = a &&& b ∨ z = a ||| b)) ∨ (a = b ∧ z = a ^^^ FU))) := by
+  have z0 : Av A 0 := Or.inr (Or.inl rfl)
+  have z1 : Av A FU := Or.inr (Or.inr rfl)
+  obtain ⟨a, b, ha, hb, hz⟩ := h
+  rcases hz with rfl | rfl | rfl
+  · rcases av_cases ha with rfl | rfl | ⟨ha', pa⟩
+    · left; simpa using z0
+    · rcases av_cases hb with rfl | rfl | ⟨hb', pb⟩
+      · left; simpa using z0
+      · left; simpa using z1
+      · left; rw [bd_fu_and (hA b hb')]; exact Or.inl hb'
+    · rcases av_cases hb with rfl | rfl | ⟨hb', pb⟩
+      · left; simpa using z0
+      · left; rw [show a &&& FU = a from hA a ha']; exact Or.inl ha'
+      · by_cases hab : a = b
+        · subst hab; left; rw [Nat.and_self]; exact Or.inl ha'
+        · right; exact ⟨a, b, ha', hb', pa, pb, Or.inl ⟨hab, Or.inl rfl⟩⟩
+  · rcases av_cases ha with rfl | rfl | ⟨ha', pa⟩
+    · left; simpa using hb
+    · left; rw [Nat.or_comm]
+      rcases av_cases hb with rfl | rfl | ⟨hb', pb⟩
+      · simpa using z1
+      · simpa using z1
+      · rw [bd_or_fu (hA b hb')]; exact z1
+    · rcases av_cases hb with rfl | rfl | ⟨hb', pb⟩
+      · left; rw [Nat.or_zero]; exact Or.inl ha'
+      · left; rw [bd_or_fu (hA a ha')]; exact z1
+      · by_cases hab : a = b
+        · subst hab; left; rw [Nat.or_self]; exact Or.inl ha'
+        · right; exact ⟨a, b, ha', hb', pa, pb, Or.inl ⟨hab, Or.inr rfl⟩⟩
+  · rcases av_cases ha with rfl | rfl | ⟨ha', pa⟩
+    · left; simpa using z1
+    · left; simpa using z0
+    · right; exact ⟨a, a, ha', ha', pa, pa, Or.inr ⟨rfl, rfl⟩⟩
+
+/-! Exact derivations: every live word is consumed, every gate output is new. -/
+
+theorem sdiff_aux (a b : Nat) (E : Finset Nat) :
+    (insert a (insert b E)) \ (({a, b} : Finset Nat) \ E) = E := by
+  ext x
+  simp only [Finset.mem_sdiff, Finset.mem_insert, Finset.mem_singleton]
+  tauto
+
+abbrev Step := Nat × Nat × Nat × Finset Nat
+
+def WF (s : Step) : Prop :=
+  proper s.1 ∧ proper s.2.1 ∧ Bd s.1 ∧ Bd s.2.1 ∧ s.2.2.2 ⊆ {s.1, s.2.1} ∧
+    ((s.1 ≠ s.2.1 ∧ (s.2.2.1 = s.1 &&& s.2.1 ∨ s.2.2.1 = s.1 ||| s.2.1)) ∨
+      (s.1 = s.2.1 ∧ s.2.2.1 = s.1 ^^^ FU))
+
+def Valid (y : Nat) : List Step → Finset Nat → Finset Nat → Prop
+  | [], S, _ => S = {y}
+  | s :: r, S, W => WF s ∧ s.1 ∈ S ∧ s.2.1 ∈ S ∧ s.2.2.1 ∉ W ∧
+      Valid y r (insert s.2.2.1 (S \ s.2.2.2)) (insert s.2.2.1 W)
+
+theorem valid_cons (y : Nat) (s : Step) (r : List Step) (S W : Finset Nat) :
+    Valid y (s :: r) S W ↔ (WF s ∧ s.1 ∈ S ∧ s.2.1 ∈ S ∧ s.2.2.1 ∉ W ∧
+      Valid y r (insert s.2.2.1 (S \ s.2.2.2)) (insert s.2.2.1 W)) := Iff.rfl
+
+theorem valid_anti (y : Nat) : ∀ (l : List Step) (S W W' : Finset Nat), W' ⊆ W →
+    Valid y l S W → Valid y l S W'
+  | [], _, _, _, _, h => h
+  | s :: r, S, W, W', hw, h => by
+      obtain ⟨h1, h2, h3, h4, h5⟩ := h
+      exact ⟨h1, h2, h3, fun hh => h4 (hw hh),
+        valid_anti y r _ _ _ (Finset.insert_subset_insert _ hw) h5⟩
+
+theorem valid_proper (y : Nat) (hy : proper y) : ∀ (l : List Step) (S W : Finset Nat),
+    Valid y l S W → ∀ x ∈ S, proper x
+  | [], S, W, h, x, hx => by
+      have hS : S = {y} := h
+      subst hS
+      rw [Finset.mem_singleton] at hx
+      subst hx; exact hy
+  | s :: r, S, W, h, x, hx => by
+      obtain ⟨hwf, h2, h3, h4, h5⟩ := h
+      by_cases hc : x ∈ s.2.2.2
+      · have hm := hwf.2.2.2.2.1 hc
+        rw [Finset.mem_insert, Finset.mem_singleton] at hm
+        rcases hm with rfl | rfl
+        · exact hwf.1
+        · exact hwf.2.1
+      · exact valid_proper y hy r _ _ h5 x
+          (Finset.mem_insert_of_mem (Finset.mem_sdiff.2 ⟨hx, hc⟩))
+
+theorem valid_bd (y : Nat) (hy : Bd y) : ∀ (l : List Step) (S W : Finset Nat),
+    Valid y l S W → ∀ x ∈ S, Bd x
+  | [], S, W, h, x, hx => by
+      have hS : S = {y} := h
+      subst hS
+      rw [Finset.mem_singleton] at hx
+      subst hx; exact hy
+  | s :: r, S, W, h, x, hx => by
+      obtain ⟨hwf, h2, h3, h4, h5⟩ := h
+      by_cases hc : x ∈ s.2.2.2
+      · have hm := hwf.2.2.2.2.1 hc
+        rw [Finset.mem_insert, Finset.mem_singleton] at hm
+        rcases hm with rfl | rfl
+        · exact hwf.2.2.1
+        · exact hwf.2.2.2.1
+      · exact valid_bd y hy r _ _ h5 x
+          (Finset.mem_insert_of_mem (Finset.mem_sdiff.2 ⟨hx, hc⟩))
+
+theorem wf_card (s : Step) (h : WF s) : s.2.2.2.card ≤ 2 :=
+  (Finset.card_le_card h.2.2.2.2.1).trans Finset.card_le_two
+
+theorem valid_card (y : Nat) : ∀ (l : List Step) (S W : Finset Nat), S ⊆ W →
+    Valid y l S W → S.card ≤ l.length + 1
+  | [], S, W, _, h => by
+      have hS : S = {y} := h
+      subst hS; simp
+  | s :: r, S, W, hsw, h => by
+      obtain ⟨hwf, h2, h3, h4, h5⟩ := h
+      have hsub : insert s.2.2.1 (S \ s.2.2.2) ⊆ insert s.2.2.1 W :=
+        Finset.insert_subset_insert _ (Finset.sdiff_subset.trans hsw)
+      have ih := valid_card y r _ _ hsub h5
+      have hc := wf_card s hwf
+      have hg : s.2.2.1 ∉ S \ s.2.2.2 := fun hh => h4 (hsw (Finset.mem_sdiff.1 hh).1)
+      rw [Finset.card_insert_of_notMem hg] at ih
+      have h6 := Finset.card_le_card_sdiff_add_card (s := S) (t := s.2.2.2)
+      simp only [List.length_cons]; omega
+
+theorem extract (y : Nat) (hy : proper y) : ∀ (l : List Nat) (A : Nat → Prop) (W : Finset Nat),
+    (∀ x, x ∈ W ↔ A x) → (∀ x, A x → Bd x) → Slp A l → (A y ∨ y ∈ l) →
+    ∃ (steps : List Step) (S : Finset Nat), steps.length ≤ l.length ∧ S ⊆ W ∧ Valid y steps S W
+  | [], A, W, hW, _, _, hy' => by
+      refine ⟨[], {y}, le_refl _, ?_, rfl⟩
+      rcases hy' with h | h
+      · intro x hx; rw [Finset.mem_singleton] at hx; subst hx; exact (hW _).2 h
+      · simp at h
+  | z :: l, A, W, hW, hA, hs, hy' => by
+      obtain ⟨hstep, ht⟩ := hs
+      have hbz : Bd z := step_bd A hA z hstep
+      have hW' : ∀ x, x ∈ insert z W ↔ (x = z ∨ A x) := by
+        intro x; rw [Finset.mem_insert, hW]
+      have hA' : ∀ x, (x = z ∨ A x) → Bd x := by
+        intro x hx; rcases hx with rfl | hx
+        · exact hbz
+        · exact hA x hx
+      have hy'' : (y = z ∨ A y) ∨ y ∈ l := by
+        rcases hy' with h | h
+        · exact Or.inl (Or.inr h)
+        · rcases List.mem_cons.1 h with h | h
+          · exact Or.inl (Or.inl h)
+          · exact Or.inr h
+      obtain ⟨steps, S', hlen, hsub, hval⟩ := extract y hy l _ (insert z W) hW' hA' ht hy''
+      by_cases hz : z ∈ S'
+      · by_cases hzW : z ∈ W
+        · refine ⟨steps, S', Nat.le_succ_of_le hlen, ?_, ?_⟩
+          · rwa [Finset.insert_eq_of_mem hzW] at hsub
+          · rwa [Finset.insert_eq_of_mem hzW] at hval
+        · have pz : proper z := valid_proper y hy steps S' _ hval z hz
+          rcases step_cases A hA z hstep with hav | ⟨a, b, ha, hb, pa, pb, hform⟩
+          · exfalso
+            rcases hav with h | h | h
+            · exact hzW ((hW z).2 h)
+            · exact pz.1 h
+            · exact pz.2 h
+          · obtain ⟨c, hc⟩ : ∃ c : Finset Nat, c = ({a, b} : Finset Nat) \ S'.erase z := ⟨_, rfl⟩
+            obtain ⟨S, hS⟩ : ∃ S : Finset Nat, S = insert a (insert b (S'.erase z)) := ⟨_, rfl⟩
+            have hSc : insert z (S \ c) = S' := by
+              rw [hS, hc, sdiff_aux, Finset.insert_erase hz]
+            have hSW : S ⊆ W := by
+              intro x hx
+              rw [hS] at hx
+              simp only [Finset.mem_insert] at hx
+              rcases hx with rfl | rfl | hx
+              · exact (hW _).2 ha
+              · exact (hW _).2 hb
+              · have h1 := hsub (Finset.mem_of_mem_erase hx)
+                rw [Finset.mem_insert] at h1
+                rcases h1 with h1 | h1
+                · exact absurd h1 (Finset.ne_of_mem_erase hx)
+                · exact h1
+            have hcs : c ⊆ {a, b} := by rw [hc]; exact Finset.sdiff_subset
+            have hwf : WF (a, b, z, c) := ⟨pa, pb, hA a ha, hA b hb, hcs, hform⟩
+            have haS : a ∈ S := hS ▸ Finset.mem_insert_self _ _
+            have hbS : b ∈ S := hS ▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _)
+            have hv2 : Valid y steps (insert z (S \ c)) (insert z W) := hSc ▸ hval
+            exact ⟨(a, b, z, c) :: steps, S, Nat.succ_le_succ hlen, hSW,
+              (valid_cons y (a, b, z, c) steps S W).2 ⟨hwf, haS, hbS, hzW, hv2⟩⟩
+      · refine ⟨steps, S', Nat.le_succ_of_le hlen, ?_, ?_⟩
+        · intro x hx
+          have h1 := hsub hx
+          rw [Finset.mem_insert] at h1
+          rcases h1 with h1 | h1
+          · exact absurd (h1 ▸ hx) hz
+          · exact h1
+        · exact valid_anti y steps S' _ W (Finset.subset_insert _ _) hval
+
+theorem swap_set (S c1 c2 o1 : Finset Nat) (g1 g2 : Nat)
+    (h1 : g1 ∉ S) (h2 : g2 ∉ S) (h12 : g1 ≠ g2) (hc1 : c1 ⊆ o1) (ho1 : o1 ⊆ S) (hg1 : g1 ∉ c2) :
+    insert g1 (insert g2 (S \ (c2 \ o1)) \ (c1 ∪ (c2 ∩ o1))) = insert g2 (insert g1 (S \ c1) \ c2) := by
+  ext x
+  simp only [Finset.mem_insert, Finset.mem_sdiff, Finset.mem_union, Finset.mem_inter]
+  by_cases e1 : x = g1
+  · subst e1
+    simp [h12, hg1]
+  · by_cases e2 : x = g2
+    · subst e2
+      have : x ∉ c1 := fun h => h2 (ho1 (hc1 h))
+      have : x ∉ o1 := fun h => h2 (ho1 h)
+      simp_all
+    · have := @hc1 x
+      simp only [e1, e2, false_or]
+      tauto
+
+-- Two neighbouring independent steps can be exchanged.
+theorem valid_swap (y : Nat) (s1 s2 : Step) (r : List Step) (S W : Finset Nat) (hSW : S ⊆ W)
+    (h : Valid y (s1 :: s2 :: r) S W) (hi1 : s1.2.2.1 ≠ s2.1) (hi2 : s1.2.2.1 ≠ s2.2.1) :
+    ∃ s2' s1' : Step, s2'.2.2.1 = s2.2.2.1 ∧ Valid y (s2' :: s1' :: r) S W := by
+  obtain ⟨o11, o12, g1, c1⟩ := s1
+  obtain ⟨o21, o22, g2, c2⟩ := s2
+  rw [valid_cons, valid_cons] at h
+  obtain ⟨w1, a1, b1, f1, w2, a2, b2, f2, hr⟩ := h
+  simp only at *
+  have g1S : g1 ∉ S := fun hh => f1 (hSW hh)
+  have g12 : g2 ≠ g1 := fun hh => f2 (hh ▸ Finset.mem_insert_self _ _)
+  have g2W : g2 ∉ W := fun hh => f2 (Finset.mem_insert_of_mem hh)
+  have g2S : g2 ∉ S := fun hh => g2W (hSW hh)
+  have a2S : o21 ∈ S := by
+    rcases Finset.mem_insert.1 a2 with e | e
+    · exact absurd e.symm hi1
+    · exact (Finset.mem_sdiff.1 e).1
+  have b2S : o22 ∈ S := by
+    rcases Finset.mem_insert.1 b2 with e | e
+    · exact absurd e.symm hi2
+    · exact (Finset.mem_sdiff.1 e).1
+  have hc1 : c1 ⊆ {o11, o12} := w1.2.2.2.2.1
+  have hc2 : c2 ⊆ {o21, o22} := w2.2.2.2.2.1
+  have ho1 : ({o11, o12} : Finset Nat) ⊆ S := by
+    intro x hx
+    rw [Finset.mem_insert, Finset.mem_singleton] at hx
+    rcases hx with rfl | rfl
+    · exact a1
+    · exact b1
+  have hg1c2 : g1 ∉ c2 := by
+    intro hh
+    have := hc2 hh
+    rw [Finset.mem_insert, Finset.mem_singleton] at this
+    rcases this with e | e
+    · exact hi1 e
+    · exact hi2 e
+  refine ⟨(o21, o22, g2, c2 \ {o11, o12}), (o11, o12, g1, c1 ∪ (c2 ∩ {o11, o12})), rfl, ?_⟩
+  rw [valid_cons, valid_cons]
+  refine ⟨⟨w2.1, w2.2.1, w2.2.2.1, w2.2.2.2.1, Finset.sdiff_subset.trans hc2, w2.2.2.2.2.2⟩,
+    a2S, b2S, g2W,
+    ⟨w1.1, w1.2.1, w1.2.2.1, w1.2.2.2.1,
+      Finset.union_subset hc1 Finset.inter_subset_right, w1.2.2.2.2.2⟩, ?_, ?_, ?_, ?_⟩
+  · refine Finset.mem_insert_of_mem (Finset.mem_sdiff.2 ⟨a1, fun hh => ?_⟩)
+    exact (Finset.mem_sdiff.1 hh).2 (Finset.mem_insert_self _ _)
+  · refine Finset.mem_insert_of_mem (Finset.mem_sdiff.2 ⟨b1, fun hh => ?_⟩)
+    exact (Finset.mem_sdiff.1 hh).2 (Finset.mem_insert_of_mem (Finset.mem_singleton_self _))
+  · intro hh
+    rcases Finset.mem_insert.1 hh with e | e
+    · exact g12 e.symm
+    · exact f1 e
+  · show Valid y r (insert g1 (insert g2 (S \ (c2 \ {o11, o12})) \ (c1 ∪ (c2 ∩ {o11, o12}))))
+      (insert g1 (insert g2 W))
+    rw [swap_set S c1 c2 {o11, o12} g1 g2 g1S g2S (Ne.symm g12) hc1 ho1 hg1c2,
+      Finset.insert_comm g1 g2 W]
+    exact hr
+
+def Canon : List Step → Prop
+  | [] => True
+  | [_] => True
+  | s1 :: s2 :: r => (s1.2.2.1 = s2.1 ∨ s1.2.2.1 = s2.2.1 ∨ s1.2.2.1 < s2.2.2.1) ∧ Canon (s2 :: r)
+
+-- Among the derivations of a given length there is one in sorted order.
+theorem canon_exists (y : Nat) : ∀ (k : Nat) (S W : Finset Nat), S ⊆ W →
+    (∃ l : List Step, l.length = k ∧ Valid y l S W) →
+    ∃ l : List Step, l.length = k ∧ Valid y l S W ∧ Canon l ∧
+      ∀ l' : List Step, l'.length = k → Valid y l' S W →
+        ∀ s ∈ l.head?, ∀ s' ∈ l'.head?, s.2.2.1 ≤ s'.2.2.1
+  | 0, S, W, _, h => by
+      obtain ⟨l, hl, hv⟩ := h
+      have : l = [] := List.length_eq_zero_iff.1 hl
+      subst this
+      exact ⟨[], rfl, hv, trivial, fun l' _ _ s hs => by simp at hs⟩
+  | k + 1, S, W, hSW, h => by
+      classical
+      let P : Nat → Prop := fun m => ∃ l : List Step, l.length = k + 1 ∧ Valid y l S W ∧
+        ∃ s ∈ l.head?, s.2.2.1 = m
+      have hP : ∃ m, P m := by
+        obtain ⟨l, hl, hv⟩ := h
+        cases l with
+        | nil => simp at hl
+        | cons s r => exact ⟨s.2.2.1, s :: r, hl, hv, s, by simp, rfl⟩
+      obtain ⟨l1, hl1, hv1, s, hs, hsm⟩ := Nat.find_spec hP
+      cases l1 with
+      | nil => simp at hl1
+      | cons s0 rest =>
+        have hs0 : s = s0 := by simpa using hs.symm
+        subst hs0
+        have hv1' := (valid_cons y s rest S W).1 hv1
+        obtain ⟨wf, a1, b1, f1, hr⟩ := hv1'
+        have hsub : insert s.2.2.1 (S \ s.2.2.2) ⊆ insert s.2.2.1 W :=
+          Finset.insert_subset_insert _ (Finset.sdiff_subset.trans hSW)
+        have hlr : rest.length = k := by simpa using hl1
+        obtain ⟨rest', hl', hv', hc', hmin'⟩ := canon_exists y k _ _ hsub ⟨rest, hlr, hr⟩
+        have hval : Valid y (s :: rest') S W := (valid_cons y s rest' S W).2 ⟨wf, a1, b1, f1, hv'⟩
+        refine ⟨s :: rest', by simp [hl'], hval, ?_, ?_⟩
+        · cases rest' with
+          | nil => trivial
+          | cons h2 r2 =>
+            refine ⟨?_, hc'⟩
+            by_contra hcon
+            have n1 : s.2.2.1 ≠ h2.1 := fun e => hcon (Or.inl e)
+            have n2 : s.2.2.1 ≠ h2.2.1 := fun e => hcon (Or.inr (Or.inl e))
+            have n3 : ¬ s.2.2.1 < h2.2.2.1 := fun e => hcon (Or.inr (Or.inr e))
+            obtain ⟨s2', s1', hg, hsw⟩ := valid_swap y s h2 r2 S W hSW hval n1 n2
+            have hP2 : P h2.2.2.1 :=
+              ⟨s2' :: s1' :: r2, by simpa using hl', hsw, s2', by simp, hg⟩
+            have hle := Nat.find_min' hP hP2
+            have hne : h2.2.2.1 ≠ s.2.2.1 := by
+              intro e
+              have := ((valid_cons y h2 r2 _ _).1 hv').2.2.2.1
+              exact this (e ▸ Finset.mem_insert_self _ _)
+            omega
+        · intro l' hl'' hv'' s1 hs1 s' hs'
+          have hs1' : s1 = s := by simpa using hs1.symm
+          subst hs1'
+          have hP2 : P s'.2.2.1 := ⟨l', hl'', hv'', s', hs', rfl⟩
+          have := Nat.find_min' hP hP2
+          omega
+
+def HomL (p : Nat → Nat) : Prop :=
+  (∀ a b, p (a &&& b) = p a &&& p b) ∧ (∀ a b, p (a ||| b) = p a ||| p b) ∧
+    (∀ a b, p (a ^^^ b) = p a ^^^ p b)
+
+theorem hom_zero {p : Nat → Nat} (h : HomL p) : p 0 = 0 := by
+  have := h.2.2 0 0
+  rw [Nat.xor_self, Nat.xor_self] at this
+  exact this
+
+def Img (p : Nat → Nat) (S : Finset Nat) : Nat → Prop := fun x => ∃ a ∈ S, x = p a
+
+def CostLe (A : Nat → Prop) (y q : Nat) : Prop :=
+  ∃ l : List Nat, l.length ≤ q ∧ Slp A l ∧ (A y ∨ y ∈ l)
+
+theorem slp_map (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) :
+    ∀ (l : List Nat) (A : Nat → Prop), Slp A l → Slp (fun x => ∃ a, A a ∧ x = p a) (l.map p)
+  | [], _, _ => trivial
+  | z :: l, A, hs => by
+      obtain ⟨⟨a, b, ha, hb, hz⟩, ht⟩ := hs
+      have av : ∀ x, Av A x → Av (fun x => ∃ a, A a ∧ x = p a) (p x) := by
+        intro x hx
+        rcases hx with hx | hx | hx
+        · exact Or.inl ⟨x, hx, rfl⟩
+        · subst hx; exact Or.inr (Or.inl (hom_zero hp))
+        · subst hx; exact Or.inr (Or.inr hf)
+      refine ⟨⟨p a, p b, av a ha, av b hb, ?_⟩, ?_⟩
+      · rcases hz with rfl | rfl | rfl
+        · exact Or.inl (hp.1 a b)
+        · exact Or.inr (Or.inl (hp.2.1 a b))
+        · exact Or.inr (Or.inr (by rw [hp.2.2, hf]))
+      · refine slp_mono _ _ _ ?_ (slp_map p hp hf l _ ht)
+        rintro x ⟨c, hc | hc, rfl⟩
+        · subst hc; exact Or.inl (Or.inl rfl)
+        · exact Or.inl (Or.inr ⟨c, hc, rfl⟩)
+
+-- The gate of a step, seen through a projection.
+theorem wf_img (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) (s : Step) (h : WF s) :
+    p s.2.2.1 = p s.1 &&& p s.2.1 ∨ p s.2.2.1 = p s.1 ||| p s.2.1 ∨ p s.2.2.1 = p s.1 ^^^ FU := by
+  rcases h.2.2.2.2.2 with ⟨_, e | e⟩ | ⟨_, e⟩
+  · exact Or.inl (by rw [e, hp.1])
+  · exact Or.inr (Or.inl (by rw [e, hp.2.1]))
+  · exact Or.inr (Or.inr (by rw [e, hp.2.2, hf]))
+
+theorem cost_pull (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) (s : Step) (hw : WF s)
+    (S : Finset Nat) (h1 : s.1 ∈ S) (h2 : s.2.1 ∈ S) (y' q : Nat)
+    (h : CostLe (Img p (insert s.2.2.1 (S \ s.2.2.2))) y' q) : CostLe (Img p S) y' (q + 1) := by
+  obtain ⟨l, hl, hs, hy⟩ := h
+  refine ⟨p s.2.2.1 :: l, by simpa using hl, ⟨⟨p s.1, p s.2.1, Or.inl ⟨_, h1, rfl⟩,
+    Or.inl ⟨_, h2, rfl⟩, wf_img p hp hf s hw⟩, ?_⟩, ?_⟩
+  · refine slp_mono _ _ _ ?_ hs
+    rintro x ⟨a, ha, rfl⟩
+    rcases Finset.mem_insert.1 ha with e | e
+    · subst e; exact Or.inl (Or.inl rfl)
+    · exact Or.inl (Or.inr ⟨a, (Finset.mem_sdiff.1 e).1, rfl⟩)
+  · rcases hy with ⟨a, ha, e⟩ | hy
+    · rcases Finset.mem_insert.1 ha with e' | e'
+      · subst e'; exact Or.inr (by simp [e])
+      · exact Or.inl ⟨a, (Finset.mem_sdiff.1 e').1, e⟩
+    · exact Or.inr (List.mem_cons_of_mem _ hy)
+
+def Coll (p : Nat → Nat) (S : Finset Nat) (g : Nat) : Prop := p g = 0 ∨ p g = FU ∨ Img p S (p g)
+
+theorem cost_free (p : Nat → Nat) (s : Step) (S : Finset Nat) (y' q : Nat) (hy' : proper y')
+    (hc : Coll p S s.2.2.1)
+    (h : CostLe (Img p (insert s.2.2.1 (S \ s.2.2.2))) y' q) : CostLe (Img p S) y' q := by
+  obtain ⟨l, hl, hs, hy⟩ := h
+  have key : ∀ x, Img p (insert s.2.2.1 (S \ s.2.2.2)) x → Av (Img p S) x := by
+    rintro x ⟨a, ha, rfl⟩
+    rcases Finset.mem_insert.1 ha with e | e
+    · subst e
+      rcases hc with h0 | h0 | h0
+      · exact Or.inr (Or.inl h0)
+      · exact Or.inr (Or.inr h0)
+      · exact Or.inl h0
+    · exact Or.inl ⟨a, (Finset.mem_sdiff.1 e).1, rfl⟩
+  refine ⟨l, hl, slp_mono _ _ _ key hs, ?_⟩
+  rcases hy with hy | hy
+  · rcases key _ hy with h0 | h0 | h0
+    · exact Or.inl h0
+    · exact absurd h0 hy'.1
+    · exact absurd h0 hy'.2
+  · exact Or.inr hy
+
+theorem not_proper {x : Nat} (h : ¬ proper x) : x = 0 ∨ x = FU := by
+  by_contra hc
+  exact h ⟨fun e => hc (Or.inl e), fun e => hc (Or.inr e)⟩
+
+theorem hom_bd {p : Nat → Nat} (hp : HomL p) (hf : p FU = FU) {a : Nat} (ha : Bd a) : Bd (p a) := by
+  unfold Bd at *
+  have := hp.1 a FU
+  rw [ha, hf] at this
+  exact this.symm
+
+theorem coll_of_const (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) (s : Step) (hw : WF s)
+    (S : Finset Nat) (h1 : s.1 ∈ S) (h2 : s.2.1 ∈ S)
+    (h : ¬ proper (p s.1) ∨ ¬ proper (p s.2.1)) : Coll p S s.2.2.1 := by
+  have b1 : Bd (p s.1) := hom_bd hp hf hw.2.2.1
+  have b2 : Bd (p s.2.1) := hom_bd hp hf hw.2.2.2.1
+  have i1 : Img p S (p s.1) := ⟨_, h1, rfl⟩
+  have i2 : Img p S (p s.2.1) := ⟨_, h2, rfl⟩
+  rcases wf_img p hp hf s hw with e | e | e
+  · rcases h with h | h
+    · rcases not_proper h with h0 | h0
+      · left; rw [e, h0, Nat.zero_and]
+      · right; right; rw [e, h0, bd_fu_and b2]; exact i2
+    · rcases not_proper h with h0 | h0
+      · left; rw [e, h0, Nat.and_zero]
+      · right; right; rw [e, h0, show p s.1 &&& FU = p s.1 from b1]; exact i1
+  · rcases h with h | h
+    · rcases not_proper h with h0 | h0
+      · right; right; rw [e, h0, Nat.zero_or]; exact i2
+      · right; left; rw [e, h0, Nat.or_comm, bd_or_fu b2]
+    · rcases not_proper h with h0 | h0
+      · right; right; rw [e, h0, Nat.or_zero]; exact i1
+      · right; left; rw [e, h0, bd_or_fu b1]
+  · rcases hw.2.2.2.2.2 with ⟨hne, e' | e'⟩ | ⟨heq, _⟩
+    · rcases h with h | h
+      · rcases not_proper h with h0 | h0
+        · left; rw [e', hp.1, h0, Nat.zero_and]
+        · right; right; rw [e', hp.1, h0, bd_fu_and b2]; exact i2
+      · rcases not_proper h with h0 | h0
+        · left; rw [e', hp.1, h0, Nat.and_zero]
+        · right; right; rw [e', hp.1, h0, show p s.1 &&& FU = p s.1 from b1]; exact i1
+    · rcases h with h | h
+      · rcases not_proper h with h0 | h0
+        · right; right; rw [e', hp.2.1, h0, Nat.zero_or]; exact i2
+        · right; left; rw [e', hp.2.1, h0, Nat.or_comm, bd_or_fu b2]
+      · rcases not_proper h with h0 | h0
+        · right; right; rw [e', hp.2.1, h0, Nat.or_zero]; exact i1
+        · right; left; rw [e', hp.2.1, h0, bd_or_fu b1]
+    · have h' : ¬ proper (p s.1) := by
+        rcases h with h | h
+        · exact h
+        · rwa [heq]
+      rcases not_proper h' with h0 | h0
+      · right; left; rw [e, h0, Nat.zero_xor]
+      · left; rw [e, h0, Nat.xor_self]
+
+theorem const_const (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) (s : Step) (hw : WF s)
+    (h1 : ¬ proper (p s.1)) (h2 : ¬ proper (p s.2.1)) : ¬ proper (p s.2.2.1) := by
+  intro hpr
+  rcases wf_img p hp hf s hw with e | e | e
+  · rcases not_proper h1 with h0 | h0 <;> rcases not_proper h2 with h3 | h3 <;>
+      rw [e, h0, h3] at hpr <;>
+      simp only [Nat.and_self, Nat.zero_and, Nat.and_zero] at hpr <;>
+      first | exact hpr.1 rfl | exact hpr.2 rfl
+  · rcases not_proper h1 with h0 | h0 <;> rcases not_proper h2 with h3 | h3 <;>
+      rw [e, h0, h3] at hpr <;>
+      simp only [Nat.or_self, Nat.zero_or, Nat.or_zero] at hpr <;>
+      first | exact hpr.1 rfl | exact hpr.2 rfl
+  · rcases not_proper h1 with h0 | h0 <;>
+      rw [e, h0] at hpr <;>
+      simp only [Nat.zero_xor, Nat.xor_self] at hpr <;>
+      first | exact hpr.1 rfl | exact hpr.2 rfl
+
+open Classical in
+noncomputable def cnt (p : Nat → Nat) (S : Finset Nat) : Nat :=
+  ∑ x ∈ S, (if proper (p x) then 0 else 1)
+
+open Classical in
+theorem cnt_step (p : Nat → Nat) (s : Step) (hw : WF s) (S : Finset Nat)
+    (h1 : s.1 ∈ S) (h2 : s.2.1 ∈ S) (hg : s.2.2.1 ∉ S) :
+    cnt p (insert s.2.2.1 (S \ s.2.2.2)) = (if proper (p s.2.2.1) then 0 else 1) + cnt p (S \ s.2.2.2) ∧
+    cnt p (S \ s.2.2.2) + cnt p s.2.2.2 = cnt p S ∧
+    cnt p s.2.2.2 ≤ (if proper (p s.1) then 0 else 1) + (if proper (p s.2.1) then 0 else 1) ∧
+    (s.1 = s.2.1 → cnt p s.2.2.2 ≤ (if proper (p s.1) then 0 else 1)) := by
+  have hcS : s.2.2.2 ⊆ S := by
+    intro x hx
+    have := hw.2.2.2.2.1 hx
+    rw [Finset.mem_insert, Finset.mem_singleton] at this
+    rcases this with rfl | rfl
+    · exact h1
+    · exact h2
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · unfold cnt
+    rw [Finset.sum_insert (fun hh => hg (Finset.mem_sdiff.1 hh).1)]
+  · unfold cnt
+    exact Finset.sum_sdiff hcS
+  · unfold cnt
+    refine (Finset.sum_le_sum_of_subset hw.2.2.2.2.1).trans ?_
+    by_cases e : s.1 = s.2.1
+    · rw [e, Finset.pair_eq_singleton, Finset.sum_singleton]; omega
+    · rw [Finset.sum_pair e]
+  · intro e
+    unfold cnt
+    refine (Finset.sum_le_sum_of_subset hw.2.2.2.2.1).trans ?_
+    rw [← e, Finset.pair_eq_singleton, Finset.sum_singleton]
+
+open Classical in
+-- A derivation of length k, seen through a projection, costs at most k minus the constants.
+theorem node_bound (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) (y : Nat) (hy' : proper (p y)) :
+    ∀ (l : List Step) (S W : Finset Nat), S ⊆ W → Valid y l S W →
+      ∃ q, q + cnt p S ≤ l.length ∧ CostLe (Img p S) (p y) q
+  | [], S, W, _, h => by
+      have hS : S = {y} := h
+      subst hS
+      refine ⟨0, ?_, [], le_refl _, trivial, Or.inl ⟨y, Finset.mem_singleton_self _, rfl⟩⟩
+      unfold cnt
+      rw [Finset.sum_singleton, ite_eq_left hy']
+      simp
+  | s :: r, S, W, hSW, h => by
+      obtain ⟨hw, h1, h2, hg, hr⟩ := (valid_cons y s r S W).1 h
+      have hsub : insert s.2.2.1 (S \ s.2.2.2) ⊆ insert s.2.2.1 W :=
+        Finset.insert_subset_insert _ (Finset.sdiff_subset.trans hSW)
+      obtain ⟨q, hq, hc⟩ := node_bound p hp hf y hy' r _ _ hsub hr
+      have hgS : s.2.2.1 ∉ S := fun hh => hg (hSW hh)
+      obtain ⟨e1, e2, e3, e4⟩ := cnt_step p s hw S h1 h2 hgS
+      by_cases hcoll : Coll p S s.2.2.1
+      · refine ⟨q, ?_, cost_free p s S (p y) q hy' hcoll hc⟩
+        have key : cnt p s.2.2.2 ≤ 1 + (if proper (p s.2.2.1) then 0 else 1) := by
+          by_cases c1 : proper (p s.1)
+          · rw [ite_eq_left c1] at e3
+            split_ifs at e3 ⊢ <;> omega
+          · by_cases c2 : proper (p s.2.1)
+            · rw [ite_eq_left c2] at e3
+              split_ifs at e3 ⊢ <;> omega
+            · rw [ite_eq_right (const_const p hp hf s hw c1 c2)]
+              rw [ite_eq_right c1, ite_eq_right c2] at e3
+              omega
+        simp only [List.length_cons]
+        omega
+      · refine ⟨q + 1, ?_, cost_pull p hp hf s hw S h1 h2 (p y) q hc⟩
+        have c1 : proper (p s.1) := by
+          by_contra c
+          exact hcoll (coll_of_const p hp hf s hw S h1 h2 (Or.inl c))
+        have c2 : proper (p s.2.1) := by
+          by_contra c
+          exact hcoll (coll_of_const p hp hf s hw S h1 h2 (Or.inr c))
+        rw [ite_eq_left c1, ite_eq_left c2] at e3
+        simp only [List.length_cons]
+        omega
+
+def LB (p : Nat → Nat) (y' : Nat) (S : Finset Nat) (v : Nat) : Prop :=
+  ∀ q, CostLe (Img p S) y' q → v ≤ q
+
+theorem lb_pull (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) (s : Step) (hw : WF s)
+    (S : Finset Nat) (h1 : s.1 ∈ S) (h2 : s.2.1 ∈ S) (y' v : Nat) (h : LB p y' S v) :
+    LB p y' (insert s.2.2.1 (S \ s.2.2.2)) (v - 1) := by
+  intro q hq
+  have := h _ (cost_pull p hp hf s hw S h1 h2 y' q hq)
+  omega
+
+theorem lb_free (p : Nat → Nat) (s : Step) (S : Finset Nat) (y' v : Nat) (hy' : proper y')
+    (hc : Coll p S s.2.2.1) (h : LB p y' S v) : LB p y' (insert s.2.2.1 (S \ s.2.2.2)) v :=
+  fun q hq => h _ (cost_free p s S y' q hy' hc hq)
+
+theorem lb_node (p : Nat → Nat) (hp : HomL p) (hf : p FU = FU) (y : Nat) (hy' : proper (p y))
+    (l : List Step) (S W : Finset Nat) (hSW : S ⊆ W) (hv : Valid y l S W) (v : Nat)
+    (h : LB p (p y) S v) : v + cnt p S ≤ l.length := by
+  obtain ⟨q, hq, hc⟩ := node_bound p hp hf y hy' l S W hSW hv
+  have := h q hc
+  omega
+
+-- Digit r of X in base 2 ^ w.
+def digw (w r X : Nat) : Nat := (X >>> (w * r)) % 2 ^ w
+
+theorem digw_lt (w r X : Nat) : digw w r X < 2 ^ w := Nat.mod_lt _ (Nat.two_pow_pos w)
+
+theorem digw_testBit (w r X j : Nat) :
+    (digw w r X).testBit j = (decide (j < w) && X.testBit (w * r + j)) := by
+  unfold digw
+  rw [Nat.testBit_mod_two_pow, Nat.testBit_shiftRight]
+
+theorem digw_ext (w : Nat) (hw : 0 < w) (X Y : Nat) (h : ∀ r, digw w r X = digw w r Y) : X = Y := by
+  apply Nat.eq_of_testBit_eq
+  intro n
+  have h1 := digw_testBit w (n / w) X (n % w)
+  have h2 := digw_testBit w (n / w) Y (n % w)
+  rw [h (n / w)] at h1
+  rw [h1] at h2
+  have hm : n % w < w := Nat.mod_lt _ hw
+  simp only [hm, decide_true, Bool.true_and, Nat.div_add_mod] at h2
+  exact h2
+
+theorem digw_and (w r a b : Nat) : digw w r (a &&& b) = digw w r a &&& digw w r b := by
+  apply Nat.eq_of_testBit_eq
+  intro j
+  simp only [digw_testBit, Nat.testBit_and]
+  cases decide (j < w) <;> simp
+
+theorem digw_or (w r a b : Nat) : digw w r (a ||| b) = digw w r a ||| digw w r b := by
+  apply Nat.eq_of_testBit_eq
+  intro j
+  simp only [digw_testBit, Nat.testBit_or]
+  cases decide (j < w) <;> simp
+
+theorem digw_xor (w r a b : Nat) : digw w r (a ^^^ b) = digw w r a ^^^ digw w r b := by
+  apply Nat.eq_of_testBit_eq
+  intro j
+  simp only [digw_testBit, Nat.testBit_xor]
+  cases decide (j < w) <;> simp
+
+theorem digw_div (w r X : Nat) : digw w r X = X / 2 ^ (w * r) % 2 ^ w := by
+  unfold digw
+  rw [Nat.shiftRight_eq_div_pow]
+
+theorem div_add_nocarry (w : Nat) (A B : Nat)
+    (h : ∀ r, digw w r A + digw w r B < 2 ^ w) :
+    ∀ r, (A + B) / 2 ^ (w * r) = A / 2 ^ (w * r) + B / 2 ^ (w * r)
+  | 0 => by simp
+  | r + 1 => by
+      have ih := div_add_nocarry w A B h r
+      have e : 2 ^ (w * (r + 1)) = 2 ^ (w * r) * 2 ^ w := by rw [Nat.mul_succ, Nat.pow_add]
+      rw [e, ← Nat.div_div_eq_div_mul, ← Nat.div_div_eq_div_mul, ← Nat.div_div_eq_div_mul, ih,
+        Nat.add_div (Nat.two_pow_pos w)]
+      have := h r
+      rw [digw_div, digw_div] at this
+      rw [ite_eq_right (by omega)]
+      rfl
+
+theorem digw_add (w : Nat) (A B : Nat) (h : ∀ r, digw w r A + digw w r B < 2 ^ w) (r : Nat) :
+    digw w r (A + B) = digw w r A + digw w r B := by
+  have h1 := h r
+  rw [digw_div, digw_div] at h1
+  rw [digw_div, digw_div, digw_div, div_add_nocarry w A B h r, Nat.add_mod,
+    Nat.mod_eq_of_lt h1]
+
+-- Base 2 ^ w numbers from their digits.
+def hor (w : Nat) (f : Nat → Nat) : Nat → Nat → Nat
+  | _, 0 => 0
+  | r, n + 1 => f r + 2 ^ w * hor w f (r + 1) n
+
+theorem digw_hor (w : Nat) (f : Nat → Nat) (hf : ∀ i, f i < 2 ^ w) :
+    ∀ (n r j : Nat), digw w j (hor w f r n) = if j < n then f (r + j) else 0
+  | 0, r, j => by
+      simp [hor, digw]
+  | n + 1, r, 0 => by
+      rw [digw_div]
+      simp only [hor, Nat.mul_zero, Nat.pow_zero, Nat.div_one, Nat.add_mul_mod_self_left,
+        Nat.zero_lt_succ, ite_true, Nat.add_zero]
+      exact Nat.mod_eq_of_lt (hf r)
+  | n + 1, r, j + 1 => by
+      have ih := digw_hor w f hf n (r + 1) j
+      rw [digw_div] at ih ⊢
+      have e : 2 ^ (w * (j + 1)) = 2 ^ w * 2 ^ (w * j) := by rw [Nat.mul_succ, Nat.pow_add, Nat.mul_comm]
+      have e2 : (f r + 2 ^ w * hor w f (r + 1) n) / 2 ^ w = hor w f (r + 1) n := by
+        rw [Nat.add_mul_div_left _ _ (Nat.two_pow_pos w), Nat.div_eq_of_lt (hf r), Nat.zero_add]
+      show (f r + 2 ^ w * hor w f (r + 1) n) / 2 ^ (w * (j + 1)) % 2 ^ w = _
+      rw [e, ← Nat.div_div_eq_div_mul, e2, ih]
+      have : r + 1 + j = r + (j + 1) := by omega
+      rw [this]
+      by_cases hj : j < n
+      · rw [ite_eq_left hj, ite_eq_left (by omega)]
+      · rw [ite_eq_right hj, ite_eq_right (by omega)]
+
+-- The top bit of a field records whether the field is not zero.
+theorem nz1 (i x : Nat) (hx : x < 2 ^ (i + 1))
+    (h : (((x &&& (2 ^ i - 1)) + (2 ^ i - 1)) ||| x) &&& 2 ^ i = 0) : x = 0 := by
+  have hP : 0 < 2 ^ i := Nat.two_pow_pos i
+  have hb : (((x &&& (2 ^ i - 1)) + (2 ^ i - 1)) ||| x).testBit i = false := by
+    have := Nat.and_two_pow (((x &&& (2 ^ i - 1)) + (2 ^ i - 1)) ||| x) i
+    rw [h] at this
+    cases hh : (((x &&& (2 ^ i - 1)) + (2 ^ i - 1)) ||| x).testBit i
+    · rfl
+    · rw [hh] at this
+      simp at this
+      omega
+  rw [Nat.testBit_or, Bool.or_eq_false_iff] at hb
+  obtain ⟨h1, h2⟩ := hb
+  have e2 : 2 ^ (i + 1) = 2 * 2 ^ i := by rw [Nat.pow_succ, Nat.mul_comm]
+  have hx2 : x < 2 ^ i := by
+    rw [Nat.testBit_eq_decide_div_mod_eq] at h2
+    have hd : x / 2 ^ i < 2 := by
+      rw [Nat.div_lt_iff_lt_mul hP]; omega
+    have hz : x / 2 ^ i = 0 := by
+      have h3 : ¬ (x / 2 ^ i % 2 = 1) := by simpa using h2
+      generalize x / 2 ^ i = t at hd h3
+      omega
+    exact (Nat.div_eq_zero_iff_lt hP).1 hz
+  rw [Nat.and_two_pow_sub_one_eq_mod, Nat.mod_eq_of_lt hx2] at h1
+  rw [Nat.testBit_eq_decide_div_mod_eq] at h1
+  by_contra hne
+  have hd : (x + (2 ^ i - 1)) / 2 ^ i = 1 := by
+    apply Nat.div_eq_of_lt_le
+    · omega
+    · omega
+  rw [hd] at h1
+  simp at h1
+
+theorem cH_eq : cH = hor 256 (fun _ => 2 ^ 255) 0 129 := by decide +kernel
+theorem cL_eq : cL = hor 256 (fun _ => 2 ^ 255 - 1) 0 129 := by decide +kernel
+theorem cM_eq : cM = hor 256 (fun _ => 255) 0 129 := by decide +kernel
+theorem cO_eq : cO = hor 256 (fun _ => 1) 0 129 := by decide +kernel
+theorem cB_eq : cB = hor 256 (fun _ => 256) 0 129 := by decide +kernel
+theorem FU_eq : FU = hor 256 (fun _ => 2 ^ 256 - 1) 0 129 := by decide +kernel
+
+theorem p255 : (2 : Nat) ^ 255 < 2 ^ 256 := Nat.pow_lt_pow_right (by norm_num) (by norm_num)
+theorem p256 : (2 : Nat) ^ 256 = 2 * 2 ^ 255 := by rw [show 256 = 255 + 1 from rfl, Nat.pow_succ, Nat.mul_comm]
+theorem small256 : (1024 : Nat) < 2 ^ 256 :=
+  lt_of_eq_of_lt (by norm_num : (1024 : Nat) = 2 ^ 10) (Nat.pow_lt_pow_right (by norm_num) (by norm_num))
+
+theorem dig_cH (r : Nat) : digw 256 r cH = if r < 129 then 2 ^ 255 else 0 := by
+  rw [cH_eq, digw_hor 256 _ (fun _ => p255)]
+theorem dig_cL (r : Nat) : digw 256 r cL = if r < 129 then 2 ^ 255 - 1 else 0 := by
+  rw [cL_eq, digw_hor 256 _ (fun _ => by have := p255; omega)]
+theorem dig_cM (r : Nat) : digw 256 r cM = if r < 129 then 255 else 0 := by
+  rw [cM_eq, digw_hor 256 _ (fun _ => by have := small256; omega)]
+theorem dig_cO (r : Nat) : digw 256 r cO = if r < 129 then 1 else 0 := by
+  rw [cO_eq, digw_hor 256 _ (fun _ => by have := small256; omega)]
+theorem dig_cB (r : Nat) : digw 256 r cB = if r < 129 then 256 else 0 := by
+  rw [cB_eq, digw_hor 256 _ (fun _ => by have := small256; omega)]
+theorem dig_FU (r : Nat) : digw 256 r FU = if r < 129 then 2 ^ 256 - 1 else 0 := by
+  rw [FU_eq, digw_hor 256 _ (fun _ => by have := Nat.two_pow_pos 256; omega)]
+
+def nz (X : Nat) : Nat := Nat.land (Nat.lor (Nat.land X cL + cL) X) cH
+
+theorem nz_sub (X : Nat) : nz X &&& cH = nz X := by
+  show ((X &&& cL) + cL ||| X) &&& cH &&& cH = ((X &&& cL) + cL ||| X) &&& cH
+  rw [Nat.and_assoc, Nat.and_self]
+
+theorem nz_dig (X r : Nat) (hr : r < 129) (h : digw 256 r (nz X) = 0) : digw 256 r X = 0 := by
+  have hadd : ∀ r', digw 256 r' (X &&& cL) + digw 256 r' cL < 2 ^ 256 := by
+    intro r'
+    have h1 : digw 256 r' (X &&& cL) ≤ digw 256 r' cL := by
+      rw [digw_and]; exact Nat.and_le_right
+    have h2 : digw 256 r' cL ≤ 2 ^ 255 - 1 := by
+      rw [dig_cL]; split_ifs <;> omega
+    have := p256
+    have := Nat.two_pow_pos 255
+    omega
+  have e : digw 256 r (nz X) =
+      (((digw 256 r X &&& (2 ^ 255 - 1)) + (2 ^ 255 - 1)) ||| digw 256 r X) &&& 2 ^ 255 := by
+    show digw 256 r (((X &&& cL) + cL ||| X) &&& cH) = _
+    rw [digw_and, digw_or, digw_add 256 _ _ hadd, digw_and, dig_cL, dig_cH, ite_eq_left hr, ite_eq_left hr]
+  rw [e] at h
+  exact nz1 255 _ (digw_lt 256 r X) h
+
+theorem cH_bit (n : Nat) (h : cH.testBit n = true) : n % 256 = 255 ∧ n / 256 < 129 := by
+  have h1 := digw_testBit 256 (n / 256) cH (n % 256)
+  have hm : n % 256 < 256 := Nat.mod_lt _ (by norm_num)
+  rw [Nat.div_add_mod, h, dig_cH] at h1
+  simp only [hm, decide_true, Bool.and_self] at h1
+  by_cases hc : n / 256 < 129
+  · rw [ite_eq_left hc, Nat.testBit_two_pow] at h1
+    have : 255 = n % 256 := by simpa using h1
+    exact ⟨this.symm, hc⟩
+  · rw [ite_eq_right hc] at h1
+    simp at h1
+
+theorem sub_bit (Y : Nat) (hY : Y &&& cH = Y) (n : Nat) (h : Y.testBit n = true) :
+    cH.testBit n = true := by
+  have := congrArg (fun t => t.testBit n) hY
+  simp only [Nat.testBit_and, h, Bool.true_and] at this
+  exact this
+
+theorem sub_dig_zero (Y : Nat) (hY : Y &&& cH = Y) (r : Nat) (h : Y.testBit (256 * r + 255) = false) :
+    digw 256 r Y = 0 := by
+  apply Nat.eq_of_testBit_eq
+  intro j
+  rw [digw_testBit, Nat.zero_testBit]
+  by_cases hj : j < 256
+  · cases hb : Y.testBit (256 * r + j)
+    · simp
+    · have := (cH_bit _ (sub_bit Y hY _ hb)).1
+      have hj2 : j = 255 := by omega
+      subst hj2
+      rw [hb] at h
+      exact absurd h (by simp)
+  · simp [hj]
+
+def flag (Y : Nat) : Nat := Nat.shiftRight (Nat.xor cH Y) 255
+
+theorem flag_dig (Y : Nat) (hY : Y &&& cH = Y) (r : Nat) :
+    digw 256 r (flag Y) = if (cH ^^^ Y).testBit (256 * r + 255) = true then 1 else 0 := by
+  have hall : ∀ n, (cH ^^^ Y).testBit n = true → n % 256 = 255 := by
+    intro n hn
+    rw [Nat.testBit_xor] at hn
+    cases hc : cH.testBit n
+    · cases hy : Y.testBit n
+      · rw [hc, hy] at hn; exact absurd hn (by simp)
+      · rw [sub_bit Y hY n hy] at hc; exact absurd hc (by simp)
+    · exact (cH_bit n hc).1
+  apply Nat.eq_of_testBit_eq
+  intro j
+  rw [digw_testBit]
+  show (decide (j < 256) && ((cH ^^^ Y) >>> 255).testBit (256 * r + j)) = _
+  rw [Nat.testBit_shiftRight]
+  by_cases hj : j = 0
+  · subst hj
+    rw [show 255 + (256 * r + 0) = 256 * r + 255 from by omega]
+    cases hb : (cH ^^^ Y).testBit (256 * r + 255) <;> simp
+  · have hz : ((if (cH ^^^ Y).testBit (256 * r + 255) = true then 1 else 0 : Nat)).testBit j = false := by
+      split_ifs
+      · cases hh : Nat.testBit 1 j
+        · rfl
+        · exact absurd (Nat.testBit_one_eq_true_iff_self_eq_zero.1 hh) hj
+      · exact Nat.zero_testBit j
+    rw [hz]
+    by_cases hj2 : j < 256
+    · cases hb : (cH ^^^ Y).testBit (255 + (256 * r + j))
+      · simp
+      · have := hall _ hb
+        omega
+    · simp [hj2]
+
+theorem flag_le (Y : Nat) (hY : Y &&& cH = Y) (r : Nat) : digw 256 r (flag Y) ≤ 1 := by
+  rw [flag_dig Y hY r]; split_ifs <;> omega
+
+theorem flag_one (Y : Nat) (hY : Y &&& cH = Y) (r : Nat) (h : digw 256 r (flag Y) = 1) :
+    r < 129 ∧ digw 256 r Y = 0 := by
+  rw [flag_dig Y hY r] at h
+  have hb : (cH ^^^ Y).testBit (256 * r + 255) = true := by
+    by_contra hc
+    rw [ite_eq_right hc] at h
+    exact absurd h (by norm_num)
+  rw [Nat.testBit_xor] at hb
+  cases hy : Y.testBit (256 * r + 255)
+  · cases hc : cH.testBit (256 * r + 255)
+    · rw [hc, hy] at hb; exact absurd hb (by simp)
+    · have := (cH_bit _ hc).2
+      exact ⟨by omega, sub_dig_zero Y hY r hy⟩
+  · rw [sub_bit Y hY _ hy, hy] at hb
+    exact absurd hb (by simp)
+
+theorem sub_and (Y1 Y2 : Nat) (h1 : Y1 &&& cH = Y1) : (Y1 &&& Y2) &&& cH = Y1 &&& Y2 := by
+  rw [Nat.and_right_comm, h1]
+
+theorem sub_dig_cases (Y : Nat) (hY : Y &&& cH = Y) (r : Nat) :
+    digw 256 r Y = 0 ∨ digw 256 r Y = 2 ^ 255 := by
+  have h1 : digw 256 r Y = digw 256 r Y &&& digw 256 r cH := by rw [← digw_and, hY]
+  rw [dig_cH] at h1
+  by_cases hr : r < 129
+  · rw [ite_eq_left hr, Nat.and_two_pow] at h1
+    cases hb : (digw 256 r Y).testBit 255
+    · left; rw [h1, hb]; simp
+    · right; rw [h1, hb]; simp
+  · rw [ite_eq_right hr, Nat.and_zero] at h1
+    exact Or.inl h1
+
+theorem and_dig_zero (Y1 Y2 : Nat) (h1 : Y1 &&& cH = Y1) (h2 : Y2 &&& cH = Y2) (r : Nat)
+    (h : digw 256 r (Y1 &&& Y2) = 0) : digw 256 r Y1 = 0 ∨ digw 256 r Y2 = 0 := by
+  rw [digw_and] at h
+  rcases sub_dig_cases Y1 h1 r with e1 | e1
+  · exact Or.inl e1
+  · rcases sub_dig_cases Y2 h2 r with e2 | e2
+    · exact Or.inr e2
+    · rw [e1, e2, Nat.and_self] at h
+      exact absurd h (Nat.two_pow_pos 255).ne'
+
+-- The blocks where a word is a constant.
+def pbits (X : Nat) : Nat := Nat.land (nz X) (nz (Nat.xor X FU))
+def ind (X : Nat) : Nat := flag (pbits X)
+
+theorem pbits_sub (X : Nat) : pbits X &&& cH = pbits X := sub_and _ _ (nz_sub X)
+
+theorem pbits_zero (X r : Nat) (hr : r < 129) (h : digw 256 r (pbits X) = 0) :
+    digw 256 r X = 0 ∨ digw 256 r X = 2 ^ 256 - 1 := by
+  rcases and_dig_zero _ _ (nz_sub X) (nz_sub (X ^^^ FU)) r h with e | e
+  · exact Or.inl (nz_dig X r hr e)
+  · right
+    have h3 : digw 256 r (X ^^^ FU) = 0 := nz_dig _ r hr e
+    rw [digw_xor, dig_FU, ite_eq_left hr] at h3
+    exact Nat.xor_eq_zero_iff.1 h3
+
+theorem ind_le (X r : Nat) : digw 256 r (ind X) ≤ 1 := flag_le _ (pbits_sub X) r
+
+theorem ind_one (X r : Nat) (h : digw 256 r (ind X) = 1) :
+    r < 129 ∧ (digw 256 r X = 0 ∨ digw 256 r X = 2 ^ 256 - 1) := by
+  obtain ⟨hr, hz⟩ := flag_one _ (pbits_sub X) r h
+  exact ⟨hr, pbits_zero X r hr hz⟩
+
+-- The blocks where a gate output is a constant or repeats an operand.
+def ncb (G A B : Nat) : Nat := Nat.land (Nat.land (pbits G) (nz (Nat.xor G A))) (nz (Nat.xor G B))
+
+theorem ncb_sub (G A B : Nat) : ncb G A B &&& cH = ncb G A B :=
+  sub_and _ _ (sub_and _ _ (pbits_sub G))
+
+theorem coll_one (G A B r : Nat) (h : digw 256 r (flag (ncb G A B)) = 1) :
+    r < 129 ∧ (digw 256 r G = 0 ∨ digw 256 r G = 2 ^ 256 - 1 ∨ digw 256 r G = digw 256 r A ∨
+      digw 256 r G = digw 256 r B) := by
+  obtain ⟨hr, hz⟩ := flag_one _ (ncb_sub G A B) r h
+  refine ⟨hr, ?_⟩
+  rcases and_dig_zero _ _ (sub_and _ _ (pbits_sub G)) (nz_sub _) r hz with e | e
+  · rcases and_dig_zero _ _ (pbits_sub G) (nz_sub _) r e with e' | e'
+    · rcases pbits_zero G r hr e' with e2 | e2
+      · exact Or.inl e2
+      · exact Or.inr (Or.inl e2)
+    · have h3 : digw 256 r (G ^^^ A) = 0 := nz_dig _ r hr e'
+      rw [digw_xor] at h3
+      exact Or.inr (Or.inr (Or.inl (Nat.xor_eq_zero_iff.1 h3)))
+  · have h3 : digw 256 r (G ^^^ B) = 0 := nz_dig _ r hr e
+    rw [digw_xor] at h3
+    exact Or.inr (Or.inr (Or.inr (Nat.xor_eq_zero_iff.1 h3)))
+
+def cmpX (Rv X : Nat) : Bool := Nat.beq (Nat.land (Rv + X + cO) cB) cB
+
+theorem xor255 : ∀ a, a < 256 → a ^^^ 255 = 255 - a := by decide +kernel
+
+theorem and256 (n : Nat) (h1 : 256 ≤ n) (h2 : n < 512) : n &&& 256 = 256 := by
+  have e : (256 : Nat) = 2 ^ 8 := by norm_num
+  have hb : n.testBit 8 = true := by
+    rw [Nat.testBit_eq_decide_div_mod_eq]
+    have : n / 2 ^ 8 = 1 := by
+      apply Nat.div_eq_of_lt_le <;> norm_num <;> omega
+    rw [this]; rfl
+  rw [e, Nat.and_two_pow, hb]
+  rfl
+
+theorem cmp_ok (Lv Rv : Nat) (h1 : ∀ r, digw 256 r Lv ≤ digw 256 r Rv)
+    (h2 : ∀ r, digw 256 r Rv ≤ 255) : cmpX Rv (Nat.xor Lv cM) = true := by
+  have hs := small256
+  have hx : ∀ r, digw 256 r (Lv ^^^ cM) ≤ 255 := by
+    intro r
+    rw [digw_xor]
+    have a := h1 r
+    have b := h2 r
+    have c : digw 256 r cM < 2 ^ 8 := by
+      rw [dig_cM]; split_ifs <;> norm_num
+    have := Nat.xor_lt_two_pow (show digw 256 r Lv < 2 ^ 8 by norm_num; omega) c
+    norm_num at this
+    omega
+  have side1 : ∀ r, digw 256 r Rv + digw 256 r (Lv ^^^ cM) < 2 ^ 256 := by
+    intro r
+    have := h2 r
+    have := hx r
+    omega
+  have side2 : ∀ r, digw 256 r (Rv + (Lv ^^^ cM)) + digw 256 r cO < 2 ^ 256 := by
+    intro r
+    rw [digw_add 256 _ _ side1]
+    have := h2 r
+    have := hx r
+    have : digw 256 r cO ≤ 1 := by rw [dig_cO]; split_ifs <;> omega
+    omega
+  have key : (Rv + (Lv ^^^ cM) + cO) &&& cB = cB := by
+    apply digw_ext 256 (by norm_num)
+    intro r
+    rw [digw_and, dig_cB]
+    by_cases hr : r < 129
+    · rw [ite_eq_left hr, digw_add 256 _ _ side2, digw_add 256 _ _ side1, digw_xor, dig_cM, dig_cO,
+        ite_eq_left hr, ite_eq_left hr]
+      have a := h1 r
+      have b := h2 r
+      rw [xor255 _ (by omega)]
+      exact and256 _ (by omega) (by omega)
+    · rw [ite_eq_right hr, Nat.and_zero]
+  show Nat.beq ((Rv + (Lv ^^^ cM) + cO) &&& cB) cB = true
+  rw [key]
+  exact Nat.beq_refl _
+
+-- Pairs of sample rows that the live words must tell apart.
+def sepv (X : Nat) : Nat := Nat.land (Nat.xor X (Nat.shiftRight X 16384)) cC
+
+theorem sepv_bit (X n : Nat) :
+    (sepv X).testBit n = ((X.testBit n ^^ X.testBit (16384 + n)) && cC.testBit n) := by
+  show ((X ^^^ (X >>> 16384)) &&& cC).testBit n = _
+  rw [Nat.testBit_and, Nat.testBit_xor, Nat.testBit_shiftRight]
+
+theorem fu_sep : sepv FU = 0 := by decide +kernel
+
+theorem sep_gate (s : Step) (hw : WF s) (n : Nat) (h : (sepv s.2.2.1).testBit n = true) :
+    (sepv s.1).testBit n = true ∨ (sepv s.2.1).testBit n = true := by
+  rw [sepv_bit] at h
+  rw [sepv_bit, sepv_bit]
+  rcases hw.2.2.2.2.2 with ⟨_, e | e⟩ | ⟨e0, e⟩
+  · rw [e, Nat.testBit_and, Nat.testBit_and] at h
+    revert h
+    cases s.1.testBit n <;> cases s.2.1.testBit n <;> cases s.1.testBit (16384 + n) <;>
+      cases s.2.1.testBit (16384 + n) <;> cases cC.testBit n <;> simp
+  · rw [e, Nat.testBit_or, Nat.testBit_or] at h
+    revert h
+    cases s.1.testBit n <;> cases s.2.1.testBit n <;> cases s.1.testBit (16384 + n) <;>
+      cases s.2.1.testBit (16384 + n) <;> cases cC.testBit n <;> simp
+  · left
+    have hf := congrArg (fun t => t.testBit n) fu_sep
+    simp only [sepv_bit, Nat.zero_testBit] at hf
+    rw [e, Nat.testBit_xor, Nat.testBit_xor] at h
+    revert h hf
+    cases s.1.testBit n <;> cases FU.testBit n <;> cases s.1.testBit (16384 + n) <;>
+      cases FU.testBit (16384 + n) <;> cases cC.testBit n <;> simp
+
+theorem valid_sep (y : Nat) : ∀ (l : List Step) (S W : Finset Nat), Valid y l S W →
+    ∀ n, (sepv y).testBit n = true → ∃ x ∈ S, (sepv x).testBit n = true
+  | [], S, W, h, n, hn => by
+      have hS : S = {y} := h
+      subst hS
+      exact ⟨y, Finset.mem_singleton_self _, hn⟩
+  | s :: r, S, W, h, n, hn => by
+      obtain ⟨hw, h1, h2, _, hr⟩ := (valid_cons y s r S W).1 h
+      obtain ⟨x, hx, hxn⟩ := valid_sep y r _ _ hr n hn
+      rcases Finset.mem_insert.1 hx with e | e
+      · subst e
+        rcases sep_gate s hw n hxn with h3 | h3
+        · exact ⟨_, h1, h3⟩
+        · exact ⟨_, h2, h3⟩
+      · exact ⟨x, (Finset.mem_sdiff.1 e).1, hxn⟩
+
+def andn (x y : Nat) : Nat := Nat.xor x (Nat.land x y)
+
+def addCov (z : Nat) (c : Nat × Nat × Nat) : Nat × Nat × Nat :=
+  (Nat.lor z c.1, Nat.lor (andn z c.1) (andn c.2.1 z), Nat.lor (Nat.land z c.2.1) (andn c.2.2 z))
+
+def coverage (v : List Nat) : Nat × Nat × Nat :=
+  v.foldr (fun a c => addCov (sepv a) c) (0, 0, 0)
+
+def takeOne (c : Nat × Nat × Nat) (a : Nat) : Nat := andn c.1 (Nat.land c.2.1 a)
+
+def takeTwo (c : Nat × Nat × Nat) (a b : Nat) : Nat :=
+  andn c.1 (Nat.lor (Nat.land c.2.1 (Nat.lor a b)) (Nat.land c.2.2 (Nat.land a b)))
+
+def unionSep : List Nat → Nat
+  | [] => 0
+  | a :: l => sepv a ||| unionSep l
+
+def dropped (del v : List Nat) : List Nat := v.filter (fun x => !(del.contains x))
+
+theorem andn_bit (x y i : Nat) : (andn x y).testBit i = (x.testBit i && !y.testBit i) := by
+  show (x ^^^ (x &&& y)).testBit i = _
+  rw [Nat.testBit_xor, Nat.testBit_and]
+  cases x.testBit i <;> cases y.testBit i <;> rfl
+
+theorem cov_one (c : Nat × Nat × Nat) (a : Nat) : takeOne (addCov a c) a = c.1 := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  show (andn (a ||| c.1) ((andn a c.1 ||| andn c.2.1 a) &&& a)).testBit i = _
+  simp only [andn_bit, Nat.testBit_or, Nat.testBit_and]
+  cases a.testBit i <;> cases c.1.testBit i <;> cases c.2.1.testBit i <;> rfl
+
+theorem cov_two (c : Nat × Nat × Nat) (a b : Nat) : takeTwo (addCov a (addCov b c)) a b = c.1 := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  show (andn (a ||| (b ||| c.1)) (((andn a (b ||| c.1) ||| andn (andn b c.1 ||| andn c.2.1 b) a) &&& (a ||| b)) |||
+    (((a &&& (andn b c.1 ||| andn c.2.1 b)) ||| andn ((b &&& c.2.1) ||| andn c.2.2 b) a) &&& (a &&& b)))).testBit i = _
+  simp only [andn_bit, Nat.testBit_or, Nat.testBit_and]
+  cases a.testBit i <;> cases b.testBit i <;> cases c.1.testBit i <;>
+    cases c.2.1.testBit i <;> cases c.2.2.testBit i <;> rfl
+
+theorem add_swap (c : Nat × Nat × Nat) (a b : Nat) : addCov a (addCov b c) = addCov b (addCov a c) := by
+  apply Prod.ext
+  · apply Nat.eq_of_testBit_eq
+    intro i
+    show (a ||| (b ||| c.1)).testBit i = (b ||| (a ||| c.1)).testBit i
+    simp only [Nat.testBit_or]
+    cases a.testBit i <;> cases b.testBit i <;> rfl
+  · apply Prod.ext
+    · apply Nat.eq_of_testBit_eq
+      intro i
+      show (andn a (b ||| c.1) ||| andn (andn b c.1 ||| andn c.2.1 b) a).testBit i =
+        (andn b (a ||| c.1) ||| andn (andn a c.1 ||| andn c.2.1 a) b).testBit i
+      simp only [andn_bit, Nat.testBit_or]
+      cases a.testBit i <;> cases b.testBit i <;> cases c.1.testBit i <;>
+        cases c.2.1.testBit i <;> rfl
+    · apply Nat.eq_of_testBit_eq
+      intro i
+      show ((a &&& (andn b c.1 ||| andn c.2.1 b)) ||| andn ((b &&& c.2.1) ||| andn c.2.2 b) a).testBit i =
+        ((b &&& (andn a c.1 ||| andn c.2.1 a)) ||| andn ((a &&& c.2.1) ||| andn c.2.2 a) b).testBit i
+      simp only [andn_bit, Nat.testBit_or, Nat.testBit_and]
+      cases a.testBit i <;> cases b.testBit i <;> cases c.1.testBit i <;>
+        cases c.2.1.testBit i <;> cases c.2.2.testBit i <;> rfl
+
+theorem cov_perm {l r : List Nat} (h : l.Perm r) : coverage l = coverage r := by
+  induction h with
+  | nil => rfl
+  | cons a _ ih => exact congrArg (addCov (sepv a)) ih
+  | swap a b t => exact add_swap _ _ _
+  | trans _ _ h1 h2 => exact h1.trans h2
+
+theorem cov_union (v : List Nat) : (coverage v).1 = unionSep v := by
+  induction v with
+  | nil => rfl
+  | cons a v ih =>
+    show sepv a ||| (coverage v).1 = (sepv a ||| unionSep v)
+    rw [ih]
+
+theorem recover_perm (del v : List Nat) (hv : v.Nodup) (hd : del.Nodup)
+    (hs : ∀ x ∈ del, x ∈ v) : v.Perm (del ++ dropped del v) := by
+  apply List.perm_of_nodup_nodup_toFinset_eq hv
+  · rw [List.nodup_append]
+    refine ⟨hd, hv.filter _, ?_⟩
+    intro a ha b hb e
+    subst b
+    simp [dropped] at hb
+    exact hb.2 ha
+  · ext x
+    simp only [List.mem_toFinset, List.mem_append, dropped, List.mem_filter, Bool.not_eq_true',
+      List.contains_eq_mem, decide_eq_false_iff_not]
+    by_cases h : x ∈ del <;> simp_all
+
+theorem one_rest {v : List Nat} {a : Nat} (hv : v.Nodup) (ha : a ∈ v) :
+    v.length = (dropped [a] v).length + 1 ∧
+      takeOne (coverage v) (sepv a) = unionSep (dropped [a] v) := by
+  have p := recover_perm [a] v hv (by simp) (by simpa using ha)
+  constructor
+  · have l := p.length_eq; simp at l; omega
+  · rw [cov_perm p]
+    exact (cov_one _ _).trans (cov_union _)
+
+theorem two_rest {v : List Nat} {a b : Nat} (hv : v.Nodup) (ha : a ∈ v) (hb : b ∈ v) (hab : a ≠ b) :
+    v.length = (dropped [a, b] v).length + 2 ∧
+      takeTwo (coverage v) (sepv a) (sepv b) = unionSep (dropped [a, b] v) := by
+  have p := recover_perm [a, b] v hv (by simp [hab]) (by simp [ha, hb])
+  constructor
+  · have l := p.length_eq; simp at l; omega
+  · rw [cov_perm p]
+    exact (cov_two _ _ _).trans (cov_union _)
+
+theorem zero_rest (v : List Nat) : dropped [] v = v := by
+  simp [dropped]
+
+theorem mem_unionSep (v : List Nat) (i : Nat) :
+    (unionSep v).testBit i = true ↔ ∃ a ∈ v, (sepv a).testBit i = true := by
+  induction v with
+  | nil => simp [unionSep]
+  | cons a v ih =>
+    simp only [unionSep, Nat.testBit_or, Bool.or_eq_true, ih, List.mem_cons, exists_eq_or_imp]
+
+-- The coverage test of a child list passes when the words still tell the target rows apart.
+theorem cover_ok (sens U : Nat) (h : ∀ n, sens.testBit n = true → U.testBit n = true) :
+    Nat.beq (Nat.land U sens) sens = true := by
+  have : U &&& sens = sens := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    rw [Nat.testBit_and]
+    cases hs : sens.testBit i
+    · simp
+    · rw [h i hs]; rfl
+  show Nat.beq (U &&& sens) sens = true
+  rw [this]
+  exact Nat.beq_refl _
+
+theorem homl_comp {p q : Nat → Nat} (hp : HomL p) (hq : HomL q) : HomL (fun x => p (q x)) :=
+  ⟨fun a b => by show p (q (a &&& b)) = _; rw [hq.1, hp.1],
+   fun a b => by show p (q (a ||| b)) = _; rw [hq.2.1, hp.2.1],
+   fun a b => by show p (q (a ^^^ b)) = _; rw [hq.2.2, hp.2.2]⟩
+
+theorem homl_shr (s : Nat) : HomL (fun x => x >>> s) :=
+  ⟨fun _ _ => Nat.shiftRight_and_distrib, fun _ _ => Nat.shiftRight_or_distrib,
+   fun _ _ => Nat.shiftRight_xor_distrib⟩
+
+theorem homl_mod (w : Nat) : HomL (fun x => x % 2 ^ w) := by
+  refine ⟨fun a b => ?_, fun a b => ?_, fun a b => ?_⟩ <;>
+    (apply Nat.eq_of_testBit_eq; intro j
+     simp only [Nat.testBit_mod_two_pow, Nat.testBit_and, Nat.testBit_or, Nat.testBit_xor]
+     cases decide (j < w) <;> simp)
+
+theorem homl_id : HomL (fun x => x) := ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩
+
+-- Copy the bits under a mask onto the positions s higher.
+def dupm (M s L : Nat) : Nat := Nat.lor (Nat.land L M) (Nat.shiftLeft (Nat.land L M) s)
+
+theorem dupm_bit (M s L n : Nat) : (dupm M s L).testBit n =
+    ((L.testBit n && M.testBit n) || (decide (s ≤ n) && (L.testBit (n - s) && M.testBit (n - s)))) := by
+  show ((L &&& M) ||| ((L &&& M) <<< s)).testBit n = _
+  rw [Nat.testBit_or, Nat.testBit_shiftLeft, Nat.testBit_and, Nat.testBit_and]
+
+theorem homl_dupm (M s : Nat) (hd : M &&& (M <<< s) = 0) : HomL (dupm M s) := by
+  have hb : ∀ n, (M.testBit n && (decide (s ≤ n) && M.testBit (n - s))) = false := by
+    intro n
+    have := congrArg (fun t => t.testBit n) hd
+    simpa only [Nat.testBit_and, Nat.testBit_shiftLeft, Nat.zero_testBit, ge_iff_le] using this
+  refine ⟨fun a b => ?_, fun a b => ?_, fun a b => ?_⟩ <;>
+    (apply Nat.eq_of_testBit_eq; intro n
+     have h := hb n
+     simp only [dupm_bit, Nat.testBit_and, Nat.testBit_or, Nat.testBit_xor]
+     revert h
+     cases a.testBit n <;> cases b.testBit n <;> cases a.testBit (n - s) <;> cases b.testBit (n - s) <;>
+       cases M.testBit n <;> cases M.testBit (n - s) <;> cases decide (s ≤ n) <;> simp)
+
+def mi (i : Nat) : Nat := Nat.land (Nat.shiftRight cMT (256 * i)) (2 ^ 256 - 1)
+
+theorem mi_disj : ∀ i, i < 8 → mi i &&& (mi i <<< 2 ^ i) = 0 := by decide +kernel
+
+theorem mi_big (i : Nat) (h : 8 ≤ i) : mi i = 0 := by
+  have h1 : cMT >>> 2048 = 0 := by decide +kernel
+  have h2 : cMT >>> (256 * i) = 0 := by
+    rw [show 256 * i = 2048 + (256 * i - 2048) from by omega, Nat.shiftRight_add, h1,
+      Nat.zero_shiftRight]
+  show (cMT >>> (256 * i)) &&& (2 ^ 256 - 1) = 0
+  rw [h2, Nat.zero_and]
+
+-- Fix input i to the value c (0 or 1) in a truth table of 256 rows.
+def p1 (i c x : Nat) : Nat := dupm (mi i) (2 ^ i) (Nat.shiftRight x (c * 2 ^ i))
+
+theorem homl_p1 (i c : Nat) : HomL (p1 i c) := by
+  have hd : mi i &&& (mi i <<< 2 ^ i) = 0 := by
+    by_cases h : i < 8
+    · exact mi_disj i h
+    · rw [mi_big i (by omega), Nat.zero_and]
+  exact (homl_comp (homl_dupm _ _ hd) (homl_shr _) :
+    HomL (fun x => dupm (mi i) (2 ^ i) (x >>> (c * 2 ^ i))))
+
+def rcode (r : Nat) : Nat := Nat.land (Nat.shiftRight cRT (16 * r)) 65535
+
+-- The truth table of block r: the table x under the restriction of that block.
+def prj (r x : Nat) : Nat :=
+  let c := rcode r
+  let k := c % 4
+  let i := c / 4 % 8
+  let ci := c / 32 % 2
+  let j := c / 64 % 8
+  let cj := c / 512 % 2
+  (if k = 0 then x else if k = 1 then p1 i ci x else p1 j cj (p1 i ci x)) % 2 ^ 256
+
+theorem homl_prj (r : Nat) : HomL (prj r) := by
+  unfold prj
+  simp only []
+  split_ifs
+  · exact homl_comp (homl_mod 256) homl_id
+  · exact homl_comp (homl_mod 256) (homl_p1 _ _)
+  · exact homl_comp (homl_mod 256) (homl_comp (homl_p1 _ _) (homl_p1 _ _))
+
+theorem prj_lt (r x : Nat) : prj r x < 2 ^ 256 := Nat.mod_lt _ (Nat.two_pow_pos 256)
+
+def pack (x : Nat) : Nat := hor 256 (fun r => prj r x) 0 129
+
+theorem dig_pack (x j : Nat) : digw 256 j (pack x) = if j < 129 then prj j x else 0 := by
+  unfold pack
+  rw [digw_hor 256 _ (fun r => prj_lt r x)]
+  simp
+
+theorem homl_pack : HomL pack := by
+  refine ⟨fun a b => ?_, fun a b => ?_, fun a b => ?_⟩ <;>
+    (apply digw_ext 256 (by norm_num); intro j
+     first | rw [digw_and] | rw [digw_or] | rw [digw_xor]
+     rw [dig_pack, dig_pack, dig_pack]
+     split_ifs
+     · first | exact (homl_prj j).1 a b | exact (homl_prj j).2.1 a b | exact (homl_prj j).2.2 a b
+     · simp)
+
+-- The projection of a packed word to block r, packed again.
+def pr (r X : Nat) : Nat := pack (digw 256 r X)
+
+theorem homl_dig (r : Nat) : HomL (digw 256 r) := ⟨digw_and 256 r, digw_or 256 r, digw_xor 256 r⟩
+
+theorem homl_pr (r : Nat) : HomL (pr r) := by
+  show HomL (fun X => pack (digw 256 r X))
+  exact homl_comp homl_pack (homl_dig r)
+
+set_option maxRecDepth 100000 in
+theorem pack_full : pack (2 ^ 256 - 1) = FU := by decide +kernel
+
+theorem pack_zero : pack 0 = 0 := hom_zero homl_pack
+
+theorem pr_fu (r : Nat) (hr : r < 129) : pr r FU = FU := by
+  unfold pr
+  rw [dig_FU, ite_eq_left hr, pack_full]
+
+def sig (r : Nat) (S : Finset Nat) : Nat := ∑ x ∈ S, digw 256 r (ind x)
+
+theorem const_of_ind (r x : Nat) (h : digw 256 r (ind x) = 1) : ¬ proper (pr r x) := by
+  obtain ⟨_, h0 | h0⟩ := ind_one x r h
+  · intro hp; exact hp.1 (by unfold pr; rw [h0, pack_zero])
+  · intro hp; exact hp.2 (by unfold pr; rw [h0, pack_full])
+
+open Classical in
+theorem sig_le_cnt (r : Nat) (S : Finset Nat) : sig r S ≤ cnt (pr r) S := by
+  unfold sig cnt
+  apply Finset.sum_le_sum
+  intro x _
+  have h1 := ind_le x r
+  by_cases hp : proper (pr r x)
+  · rw [ite_eq_left hp]
+    by_contra hc
+    exact const_of_ind r x (by omega) hp
+  · rw [ite_eq_right hp]; exact h1
+
+-- What the search knows at a node with k steps to go.
+def Inv (y : Nat) (U : Nat → Prop) (k : Nat) (S : Finset Nat) (Lv Rv : Nat) : Prop :=
+  ∀ r, digw 256 r Lv + 2 * k ≤ 100 ∧ digw 256 r Rv + 2 * k ≤ 250 ∧
+    (129 ≤ r → digw 256 r Lv = 0) ∧
+    (r < 129 → ¬ U r → 150 ≤ digw 256 r Rv) ∧
+    (U r → r < 129 ∧ proper (pr r y) ∧
+      ∃ v, LB (pr r) (pr r y) S v ∧ digw 256 r Lv + k ≤ digw 256 r Rv + v + sig r S)
+
+theorem inv_cmp (y : Nat) (U : Nat → Prop) (l : List Step) (S W : Finset Nat) (Lv Rv : Nat)
+    (hSW : S ⊆ W) (hv : Valid y l S W) (h : Inv y U l.length S Lv Rv) :
+    cmpX Rv (Nat.xor Lv cM) = true := by
+  apply cmp_ok
+  · intro r
+    obtain ⟨h1, h2, h3, h4, h5⟩ := h r
+    by_cases hr : r < 129
+    · by_cases hu : U r
+      · obtain ⟨_, hpy, v, hlb, hle⟩ := h5 hu
+        have := lb_node (pr r) (homl_pr r) (pr_fu r hr) y hpy l S W hSW hv v hlb
+        have := sig_le_cnt r S
+        omega
+      · have := h4 hr hu
+        omega
+    · rw [h3 (by omega)]; exact Nat.zero_le _
+  · intro r
+    have := (h r).2.1
+    omega
+
+def RvOf (Rv : Nat) (del : List Nat) : Nat := del.foldl (fun acc x => acc + ind x) Rv
+
+theorem dig_rvof : ∀ (del : List Nat) (Rv : Nat), (∀ r, digw 256 r Rv + del.length ≤ 1000) →
+    ∀ r, digw 256 r (RvOf Rv del) = digw 256 r Rv + (del.map (fun x => digw 256 r (ind x))).sum
+  | [], Rv, _, r => by simp [RvOf]
+  | x :: t, Rv, h, r => by
+      have hs := small256
+      have side : ∀ r, digw 256 r Rv + digw 256 r (ind x) < 2 ^ 256 := by
+        intro r
+        have := h r
+        have := ind_le x r
+        simp only [List.length_cons] at *
+        omega
+      have h' : ∀ r, digw 256 r (Rv + ind x) + t.length ≤ 1000 := by
+        intro r
+        rw [digw_add 256 _ _ side]
+        have := h r
+        have := ind_le x r
+        simp only [List.length_cons] at *
+        omega
+      show digw 256 r (RvOf (Rv + ind x) t) = _
+      rw [dig_rvof t _ h' r, digw_add 256 _ _ side]
+      simp only [List.map_cons, List.sum_cons]
+      omega
+
+theorem coll_of_flag (r G A B : Nat) (S : Finset Nat) (hA : A ∈ S) (hB : B ∈ S)
+    (h : digw 256 r (flag (ncb G A B)) = 1) : Coll (pr r) S G := by
+  obtain ⟨_, h0 | h0 | h0 | h0⟩ := coll_one G A B r h
+  · left; unfold pr; rw [h0, pack_zero]
+  · right; left; unfold pr; rw [h0, pack_full]
+  · right; right; exact ⟨A, hA, by unfold pr; rw [h0]⟩
+  · right; right; exact ⟨B, hB, by unfold pr; rw [h0]⟩
+
+theorem sig_step (r : Nat) (S c : Finset Nat) (g : Nat) (hg : g ∉ S) (hc : c ⊆ S) :
+    sig r (insert g (S \ c)) + ∑ x ∈ c, digw 256 r (ind x) = sig r S + digw 256 r (ind g) := by
+  unfold sig
+  rw [Finset.sum_insert (fun hh => hg (Finset.mem_sdiff.1 hh).1), ← Finset.sum_sdiff hc]
+  omega
+
+theorem inv_step (y : Nat) (U : Nat → Prop) (k : Nat) (S : Finset Nat) (Lv Rv : Nat) (s : Step)
+    (hw : WF s) (h1 : s.1 ∈ S) (h2 : s.2.1 ∈ S) (hg : s.2.2.1 ∉ S)
+    (del : List Nat) (hdn : del.Nodup) (hdc : del.toFinset = s.2.2.2)
+    (h : Inv y U (k + 1) S Lv Rv) :
+    Inv y U k (insert s.2.2.1 (S \ s.2.2.2))
+      (Lv + flag (ncb s.2.2.1 s.1 s.2.1) + ind s.2.2.1) (RvOf Rv del) := by
+  have hs := small256
+  have hcS : s.2.2.2 ⊆ S := by
+    intro x hx
+    have := hw.2.2.2.2.1 hx
+    rw [Finset.mem_insert, Finset.mem_singleton] at this
+    rcases this with rfl | rfl
+    · exact h1
+    · exact h2
+  have hlen : del.length ≤ 2 := by
+    have := wf_card s hw
+    rw [← hdc, List.toFinset_card_of_nodup hdn] at this
+    exact this
+  have hfl : ∀ r, digw 256 r (flag (ncb s.2.2.1 s.1 s.2.1)) ≤ 1 := fun r => flag_le _ (ncb_sub _ _ _) r
+  have side1 : ∀ r, digw 256 r Lv + digw 256 r (flag (ncb s.2.2.1 s.1 s.2.1)) < 2 ^ 256 := by
+    intro r
+    have := (h r).1
+    have := hfl r
+    omega
+  have side2 : ∀ r, digw 256 r (Lv + flag (ncb s.2.2.1 s.1 s.2.1)) + digw 256 r (ind s.2.2.1) < 2 ^ 256 := by
+    intro r
+    rw [digw_add 256 _ _ side1]
+    have := (h r).1
+    have := hfl r
+    have := ind_le s.2.2.1 r
+    omega
+  have hRv : ∀ r, digw 256 r Rv + del.length ≤ 1000 := by
+    intro r
+    have := (h r).2.1
+    omega
+  intro r
+  obtain ⟨a1, a2, a3, a4, a5⟩ := h r
+  have eL : digw 256 r (Lv + flag (ncb s.2.2.1 s.1 s.2.1) + ind s.2.2.1) =
+      digw 256 r Lv + digw 256 r (flag (ncb s.2.2.1 s.1 s.2.1)) + digw 256 r (ind s.2.2.1) := by
+    rw [digw_add 256 _ _ side2, digw_add 256 _ _ side1]
+  have eR := dig_rvof del Rv hRv r
+  have eS : (del.map (fun x => digw 256 r (ind x))).sum = ∑ x ∈ s.2.2.2, digw 256 r (ind x) := by
+    rw [← hdc, List.sum_toFinset _ hdn]
+  have hsum : (del.map (fun x => digw 256 r (ind x))).sum ≤ 2 := by
+    have : ∀ (t : List Nat), (t.map (fun x => digw 256 r (ind x))).sum ≤ t.length := by
+      intro t
+      induction t with
+      | nil => simp
+      | cons x t ih =>
+        have := ind_le x r
+        simp only [List.map_cons, List.sum_cons, List.length_cons]
+        omega
+    exact (this del).trans hlen
+  have hF := hfl r
+  have hI := ind_le s.2.2.1 r
+  rw [eL, eR]
+  refine ⟨by omega, by omega, ?_, ?_, ?_⟩
+  · intro hr
+    have z1 : digw 256 r (flag (ncb s.2.2.1 s.1 s.2.1)) = 0 := by
+      by_contra hc
+      have := (flag_one (ncb s.2.2.1 s.1 s.2.1) (ncb_sub _ _ _) r (by omega)).1
+      omega
+    have z2 : digw 256 r (ind s.2.2.1) = 0 := by
+      by_contra hc
+      have := (ind_one s.2.2.1 r (by omega)).1
+      omega
+    rw [a3 hr, z1, z2]
+  · intro hr hu
+    have := a4 hr hu
+    omega
+  · intro hu
+    obtain ⟨hr, hpy, v, hlb, hle⟩ := a5 hu
+    refine ⟨hr, hpy, ?_⟩
+    have hsig := sig_step r S s.2.2.2 s.2.2.1 hg hcS
+    rw [← eS] at hsig
+    by_cases hc : digw 256 r (flag (ncb s.2.2.1 s.1 s.2.1)) = 1
+    · refine ⟨v, lb_free (pr r) s S (pr r y) v hpy (coll_of_flag r _ _ _ S h1 h2 hc) hlb, ?_⟩
+      omega
+    · refine ⟨v - 1, lb_pull (pr r) (homl_pr r) (pr_fu r hr) s hw S h1 h2 (pr r y) v hlb, ?_⟩
+      omega
+
+def tryC (rec : List Nat → Nat → Nat → Nat → Bool) (k sens n : Nat) (v del : List Nat)
+    (Lv' Rv X U G : Nat) : Bool :=
+  Nat.ble (n + 1) (k + 1 + del.length) && (Nat.beq (Nat.land U sens) sens &&
+    (cmpX (RvOf Rv del) X && rec (G :: dropped del v) Lv' (RvOf Rv del) G))
+
+def cand (rec : List Nat → Nat → Nat → Nat → Bool) (k sens n : Nat) (v : List Nat)
+    (cov : Nat × Nat × Nat) (Lv Rv prev A B G : Nat) (un : Bool) : Bool :=
+  (!(Nat.beq G 0) && (!(Nat.beq G FU) && (!(Nat.beq G A) && (!(Nat.beq G B) &&
+    (Nat.beq A prev || (Nat.beq B prev || Nat.blt prev G)))))) &&
+  (tryC rec k sens n v [] (Lv + flag (ncb G A B) + ind G) Rv
+      (Nat.xor (Lv + flag (ncb G A B) + ind G) cM) (Nat.lor cov.1 (sepv G)) G ||
+   (tryC rec k sens n v [A] (Lv + flag (ncb G A B) + ind G) Rv
+      (Nat.xor (Lv + flag (ncb G A B) + ind G) cM) (Nat.lor (takeOne cov (sepv A)) (sepv G)) G ||
+    (!un && (tryC rec k sens n v [B] (Lv + flag (ncb G A B) + ind G) Rv
+        (Nat.xor (Lv + flag (ncb G A B) + ind G) cM) (Nat.lor (takeOne cov (sepv B)) (sepv G)) G ||
+      tryC rec k sens n v [A, B] (Lv + flag (ncb G A B) + ind G) Rv
+        (Nat.xor (Lv + flag (ncb G A B) + ind G) cM)
+        (Nat.lor (takeTwo cov (sepv A) (sepv B)) (sepv G)) G))))
+
+def scanPairs (p : Nat → Nat → Bool) : List Nat → Bool
+  | [] => false
+  | a :: r => r.any (p a) || scanPairs p r
+
+def search (y sens : Nat) : Nat → List Nat → Nat → Nat → Nat → Bool
+  | 0, v, _, _, _ => match v with
+      | [x] => Nat.beq x y
+      | _ => false
+  | k + 1, v, Lv, Rv, prev =>
+      v.any (fun a => cand (search y sens k) k sens v.length v (coverage v) Lv Rv prev a a
+        (Nat.xor a FU) true) ||
+      scanPairs (fun a b =>
+        cand (search y sens k) k sens v.length v (coverage v) Lv Rv prev a b (Nat.land a b) false ||
+        cand (search y sens k) k sens v.length v (coverage v) Lv Rv prev a b (Nat.lor a b) false) v
+
+theorem nbeq_false {a b : Nat} (h : a ≠ b) : Nat.beq a b = false := by
+  cases hb : Nat.beq a b
+  · rfl
+  · exact absurd (Nat.eq_of_beq_eq_true hb) h
+
+theorem scanPairs_complete (p : Nat → Nat → Bool) : ∀ (v : List Nat) (a b : Nat), a ∈ v → b ∈ v →
+    a ≠ b → p a b = true → p b a = true → scanPairs p v = true
+  | [], _, _, ha, _, _, _, _ => by simp at ha
+  | x :: r, a, b, ha, hb, hab, h1, h2 => by
+      show (r.any (p x) || scanPairs p r) = true
+      rw [Bool.or_eq_true]
+      rcases List.mem_cons.1 ha with rfl | ha'
+      · rcases List.mem_cons.1 hb with e | hb'
+        · exact absurd e.symm hab
+        · exact Or.inl (List.any_eq_true.2 ⟨b, hb', h1⟩)
+      · rcases List.mem_cons.1 hb with rfl | hb'
+        · exact Or.inl (List.any_eq_true.2 ⟨a, ha', h2⟩)
+        · exact Or.inr (scanPairs_complete p r a b ha' hb' hab h1 h2)
+
+-- All that is known about the child of a step, for one way to list the consumed words.
+theorem child_ok (y : Nat) (U : Nat → Prop) (s : Step) (rest : List Step)
+    (S W : Finset Nat) (hSW : S ⊆ W) (hv : Valid y (s :: rest) S W)
+    (v : List Nat) (hvn : v.Nodup) (hvS : v.toFinset = S) (Lv Rv : Nat)
+    (hinv : Inv y U (rest.length + 1) S Lv Rv)
+    (del : List Nat) (hdn : del.Nodup) (hdc : del.toFinset = s.2.2.2) :
+    (s.2.2.1 :: dropped del v).Nodup ∧
+    (s.2.2.1 :: dropped del v).toFinset = insert s.2.2.1 (S \ s.2.2.2) ∧
+    Inv y U rest.length (insert s.2.2.1 (S \ s.2.2.2))
+      (Lv + flag (ncb s.2.2.1 s.1 s.2.1) + ind s.2.2.1) (RvOf Rv del) ∧
+    cmpX (RvOf Rv del) (Nat.xor (Lv + flag (ncb s.2.2.1 s.1 s.2.1) + ind s.2.2.1) cM) = true ∧
+    (dropped del v).length + 1 ≤ rest.length + 1 ∧
+    (∀ n, (sepv y).testBit n = true → (unionSep (s.2.2.1 :: dropped del v)).testBit n = true) ∧
+    v.length = (dropped del v).length + del.length ∧ (∀ x ∈ del, x ∈ v) := by
+  obtain ⟨hw, h1, h2, hg, hr⟩ := (valid_cons y s rest S W).1 hv
+  have hgS : s.2.2.1 ∉ S := fun hh => hg (hSW hh)
+  have hsub : insert s.2.2.1 (S \ s.2.2.2) ⊆ insert s.2.2.1 W :=
+    Finset.insert_subset_insert _ (Finset.sdiff_subset.trans hSW)
+  have hcS : s.2.2.2 ⊆ S := by
+    intro x hx
+    have := hw.2.2.2.2.1 hx
+    rw [Finset.mem_insert, Finset.mem_singleton] at this
+    rcases this with rfl | rfl
+    · exact h1
+    · exact h2
+  have hdv : ∀ x ∈ del, x ∈ v := by
+    intro x hx
+    have : x ∈ del.toFinset := List.mem_toFinset.2 hx
+    rw [hdc] at this
+    have := hcS this
+    rw [← hvS] at this
+    exact List.mem_toFinset.1 this
+  have hnd : (s.2.2.1 :: dropped del v).Nodup := by
+    rw [List.nodup_cons]
+    refine ⟨fun hh => hgS ?_, hvn.filter _⟩
+    rw [← hvS]
+    exact List.mem_toFinset.2 (List.mem_of_mem_filter hh)
+  have hfs : (s.2.2.1 :: dropped del v).toFinset = insert s.2.2.1 (S \ s.2.2.2) := by
+    ext x
+    rw [← hvS, ← hdc]
+    simp only [List.toFinset_cons, Finset.mem_insert, List.mem_toFinset, dropped, List.mem_filter,
+      Finset.mem_sdiff, Bool.not_eq_true', List.contains_eq_mem, decide_eq_false_iff_not]
+  have hI := inv_step y U rest.length S Lv Rv s hw h1 h2 hgS del hdn hdc hinv
+  have hc := inv_cmp y U rest _ _ _ _ hsub hr hI
+  have hlen : (dropped del v).length + 1 ≤ rest.length + 1 := by
+    have := valid_card y rest _ _ hsub hr
+    rw [← hfs, List.toFinset_card_of_nodup hnd] at this
+    simpa using this
+  refine ⟨hnd, hfs, hI, hc, hlen, ?_, ?_, hdv⟩
+  · intro n hn
+    obtain ⟨x, hx, hxn⟩ := valid_sep y rest _ _ hr n hn
+    rw [← hfs] at hx
+    exact (mem_unionSep _ n).2 ⟨x, List.mem_toFinset.1 hx, hxn⟩
+  · have p := recover_perm del v hvn hdn hdv
+    have := p.length_eq
+    rw [List.length_append] at this
+    omega
+
+theorem try_ok (rec : List Nat → Nat → Nat → Nat → Bool) (k sens : Nat) (v del : List Nat)
+    (Lv' Rv U G : Nat)
+    (h1 : (dropped del v).length + 1 ≤ k + 1) (h2 : v.length = (dropped del v).length + del.length)
+    (h3 : ∀ n, sens.testBit n = true → U.testBit n = true)
+    (h4 : cmpX (RvOf Rv del) (Nat.xor Lv' cM) = true)
+    (h5 : rec (G :: dropped del v) Lv' (RvOf Rv del) G = true) :
+    tryC rec k sens v.length v del Lv' Rv (Nat.xor Lv' cM) U G = true := by
+  unfold tryC
+  rw [Bool.and_eq_true, Bool.and_eq_true, Bool.and_eq_true]
+  exact ⟨Nat.ble_eq_true_of_le (by omega), cover_ok sens U h3, h4, h5⟩
+
+theorem union_cons_bit (g : Nat) (d : List Nat) (E : Nat) (hE : E = unionSep d) (n : Nat)
+    (h : (unionSep (g :: d)).testBit n = true) : (Nat.lor E (sepv g)).testBit n = true := by
+  show (E ||| sepv g).testBit n = true
+  have h' : (sepv g ||| unionSep d).testBit n = true := h
+  rw [Nat.testBit_or] at h' ⊢
+  rw [hE, Bool.or_comm]
+  exact h'
+
+theorem cand_ok (y : Nat) (hy : proper y) (U : Nat → Prop) (a b g : Nat) (c : Finset Nat)
+    (rest : List Step) (S W : Finset Nat) (hSW : S ⊆ W) (hv : Valid y ((a, b, g, c) :: rest) S W)
+    (v : List Nat) (hvn : v.Nodup) (hvS : v.toFinset = S) (Lv Rv prev : Nat)
+    (hinv : Inv y U (rest.length + 1) S Lv Rv)
+    (rec : List Nat → Nat → Nat → Nat → Bool)
+    (hIH : ∀ (v' : List Nat) (Lv' Rv' : Nat), v'.Nodup → v'.toFinset = insert g (S \ c) →
+      Inv y U rest.length (insert g (S \ c)) Lv' Rv' → rec v' Lv' Rv' g = true)
+    (hprev : prev = a ∨ prev = b ∨ prev < g)
+    (un : Bool) (hun : un = true → a = b) :
+    cand rec rest.length (sepv y) v.length v (coverage v) Lv Rv prev a b g un = true := by
+  obtain ⟨hw, h1, h2, hg, hr⟩ := (valid_cons y (a, b, g, c) rest S W).1 hv
+  simp only at hw h1 h2 hg hr
+  have hgS : g ∉ S := fun hh => hg (hSW hh)
+  have pg : proper g := valid_proper y hy rest _ _ hr g (Finset.mem_insert_self _ _)
+  have a_in : a ∈ v := by rw [← List.mem_toFinset, hvS]; exact h1
+  have b_in : b ∈ v := by rw [← List.mem_toFinset, hvS]; exact h2
+  have hcab : c ⊆ {a, b} := hw.2.2.2.2.1
+  have key : ∀ (del : List Nat), del.Nodup → del.toFinset = c → ∀ E, E = unionSep (dropped del v) →
+      tryC rec rest.length (sepv y) v.length v del (Lv + flag (ncb g a b) + ind g) Rv
+        (Nat.xor (Lv + flag (ncb g a b) + ind g) cM) (Nat.lor E (sepv g)) g = true := by
+    intro del hdn hdc E hE
+    obtain ⟨c1, c2, c3, c4, c5, c6, c7, _⟩ :=
+      child_ok y U (a, b, g, c) rest S W hSW hv v hvn hvS Lv Rv hinv del hdn hdc
+    exact try_ok rec rest.length (sepv y) v del _ Rv _ g c5 c7
+      (fun n hn => union_cons_bit g _ E hE n (c6 n hn)) c4 (hIH _ _ _ c1 c2 c3)
+  unfold cand
+  rw [Bool.and_eq_true]
+  constructor
+  · have ga : g ≠ a := fun e => hgS (by rw [e]; exact h1)
+    have gb : g ≠ b := fun e => hgS (by rw [e]; exact h2)
+    rw [nbeq_false pg.1, nbeq_false pg.2, nbeq_false ga, nbeq_false gb]
+    simp only [Bool.not_false, Bool.true_and]
+    rw [Bool.or_eq_true, Bool.or_eq_true]
+    rcases hprev with e | e | e
+    · exact Or.inl (e ▸ Nat.beq_refl _)
+    · exact Or.inr (Or.inl (e ▸ Nat.beq_refl _))
+    · exact Or.inr (Or.inr (Nat.ble_eq_true_of_le e))
+  · rw [Bool.or_eq_true, Bool.or_eq_true]
+    by_cases hA : a ∈ c
+    · by_cases hB : b ∈ c
+      · by_cases e : a = b
+        · have hc1 : c = {a} := by
+            ext x
+            rw [Finset.mem_singleton]
+            constructor
+            · intro hx
+              have := hcab hx
+              rw [Finset.mem_insert, Finset.mem_singleton] at this
+              rcases this with h | h
+              · exact h
+              · exact h.trans e.symm
+            · rintro rfl; exact hA
+          exact Or.inr (Or.inl (key [a] (List.nodup_singleton a) (by rw [hc1]; simp) _
+            (one_rest hvn a_in).2))
+        · have hc1 : c = {a, b} := by
+            apply Finset.Subset.antisymm hcab
+            intro x hx
+            rw [Finset.mem_insert, Finset.mem_singleton] at hx
+            rcases hx with rfl | rfl
+            · exact hA
+            · exact hB
+          have hu : un = false := by
+            cases hh : un
+            · rfl
+            · exact absurd (hun hh) e
+          right; right
+          rw [hu]
+          simp only [Bool.not_false, Bool.true_and]
+          rw [Bool.or_eq_true]
+          exact Or.inr (key [a, b] (by simp [e]) (by rw [hc1]; simp) _ (two_rest hvn a_in b_in e).2)
+      · have hc1 : c = {a} := by
+          ext x
+          rw [Finset.mem_singleton]
+          constructor
+          · intro hx
+            have := hcab hx
+            rw [Finset.mem_insert, Finset.mem_singleton] at this
+            rcases this with h | h
+            · exact h
+            · exact absurd (h ▸ hx) hB
+          · rintro rfl; exact hA
+        exact Or.inr (Or.inl (key [a] (List.nodup_singleton a) (by rw [hc1]; simp) _
+          (one_rest hvn a_in).2))
+    · by_cases hB : b ∈ c
+      · have e : a ≠ b := fun e => hA (e ▸ hB)
+        have hc1 : c = {b} := by
+          ext x
+          rw [Finset.mem_singleton]
+          constructor
+          · intro hx
+            have := hcab hx
+            rw [Finset.mem_insert, Finset.mem_singleton] at this
+            rcases this with h | h
+            · exact absurd (h ▸ hx) hA
+            · exact h
+          · rintro rfl; exact hB
+        have hu : un = false := by
+          cases hh : un
+          · rfl
+          · exact absurd (hun hh) e
+        right; right
+        rw [hu]
+        simp only [Bool.not_false, Bool.true_and]
+        rw [Bool.or_eq_true]
+        exact Or.inl (key [b] (List.nodup_singleton b) (by rw [hc1]; simp) _ (one_rest hvn b_in).2)
+      · have hc1 : c = ∅ := by
+          ext x
+          constructor
+          · intro hx
+            have := hcab hx
+            rw [Finset.mem_insert, Finset.mem_singleton] at this
+            rcases this with h | h
+            · exact absurd (h ▸ hx) hA
+            · exact absurd (h ▸ hx) hB
+          · intro hx; simp at hx
+        refine Or.inl (key [] List.nodup_nil (by rw [hc1]; simp) _ ?_)
+        rw [zero_rest]
+        exact cov_union v
+
+theorem wf_symm (a b g : Nat) (c : Finset Nat) (h : WF (a, b, g, c)) : WF (b, a, g, c) := by
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := h
+  simp only at h1 h2 h3 h4 h5 h6
+  refine ⟨h2, h1, h4, h3, ?_, ?_⟩
+  · show c ⊆ {b, a}
+    rw [Finset.pair_comm]; exact h5
+  · show (b ≠ a ∧ (g = b &&& a ∨ g = b ||| a)) ∨ (b = a ∧ g = b ^^^ FU)
+    rcases h6 with ⟨hne, e | e⟩ | ⟨heq, e⟩
+    · exact Or.inl ⟨Ne.symm hne, Or.inl (by rw [e, Nat.and_comm])⟩
+    · exact Or.inl ⟨Ne.symm hne, Or.inr (by rw [e, Nat.or_comm])⟩
+    · exact Or.inr ⟨heq.symm, by rw [e, heq]⟩
+
+theorem search_zero (y sens x Lv Rv prev : Nat) :
+    search y sens 0 [x] Lv Rv prev = Nat.beq x y := rfl
+
+theorem search_succ (y sens k : Nat) (v : List Nat) (Lv Rv prev : Nat) :
+    search y sens (k + 1) v Lv Rv prev =
+      (v.any (fun a => cand (search y sens k) k sens v.length v (coverage v) Lv Rv prev a a
+        (Nat.xor a FU) true) ||
+      scanPairs (fun a b =>
+        cand (search y sens k) k sens v.length v (coverage v) Lv Rv prev a b (Nat.land a b) false ||
+        cand (search y sens k) k sens v.length v (coverage v) Lv Rv prev a b (Nat.lor a b) false) v) := rfl
+
+-- The search follows every sorted derivation that respects the oracle bounds.
+theorem search_sound (y : Nat) (hy : proper y) (U : Nat → Prop) :
+    ∀ (l : List Step) (S W : Finset Nat) (v : List Nat) (Lv Rv prev : Nat), S ⊆ W →
+      Valid y l S W → Canon l → (∀ s ∈ l.head?, prev = s.1 ∨ prev = s.2.1 ∨ prev < s.2.2.1) →
+      v.Nodup → v.toFinset = S → Inv y U l.length S Lv Rv →
+      search y (sepv y) l.length v Lv Rv prev = true
+  | [], S, W, v, Lv, Rv, prev, _, hv, _, _, hvn, hvS, _ => by
+      have hS : S = {y} := hv
+      have hl : v.length = 1 := by
+        rw [← List.toFinset_card_of_nodup hvn, hvS, hS]; simp
+      obtain ⟨x, rfl⟩ := List.length_eq_one_iff.1 hl
+      have hx : x = y := by
+        have : x ∈ ([x] : List Nat).toFinset := by simp
+        rw [hvS, hS, Finset.mem_singleton] at this
+        exact this
+      show search y (sepv y) 0 [x] Lv Rv prev = true
+      rw [search_zero, hx]
+      exact Nat.beq_refl y
+  | (a, b, g, c) :: rest, S, W, v, Lv, Rv, prev, hSW, hv, hcan, hprev, hvn, hvS, hinv => by
+      obtain ⟨hw, h1, h2, hg, hr⟩ := (valid_cons y (a, b, g, c) rest S W).1 hv
+      simp only at hw h1 h2 hg hr
+      have hsub : insert g (S \ c) ⊆ insert g W :=
+        Finset.insert_subset_insert _ (Finset.sdiff_subset.trans hSW)
+      have hcr : Canon rest ∧ ∀ s ∈ rest.head?, g = s.1 ∨ g = s.2.1 ∨ g < s.2.2.1 := by
+        cases rest with
+        | nil => exact ⟨trivial, fun s hs => by simp at hs⟩
+        | cons h r =>
+          refine ⟨hcan.2, fun s hs => ?_⟩
+          have : s = h := by simpa using hs.symm
+          subst this
+          exact hcan.1
+      have hIH : ∀ (v' : List Nat) (Lv' Rv' : Nat), v'.Nodup → v'.toFinset = insert g (S \ c) →
+          Inv y U rest.length (insert g (S \ c)) Lv' Rv' →
+          search y (sepv y) rest.length v' Lv' Rv' g = true :=
+        fun v' Lv' Rv' hn hf hi =>
+          search_sound y hy U rest _ _ v' Lv' Rv' g hsub hr hcr.1 hcr.2 hn hf hi
+      have hp : prev = a ∨ prev = b ∨ prev < g := hprev (a, b, g, c) (by simp)
+      have a_in : a ∈ v := by rw [← List.mem_toFinset, hvS]; exact h1
+      have b_in : b ∈ v := by rw [← List.mem_toFinset, hvS]; exact h2
+      show search y (sepv y) (rest.length + 1) v Lv Rv prev = true
+      rw [search_succ, Bool.or_eq_true]
+      have hv' : Valid y ((b, a, g, c) :: rest) S W :=
+        (valid_cons y (b, a, g, c) rest S W).2 ⟨wf_symm a b g c hw, h2, h1, hg, hr⟩
+      have hp' : prev = b ∨ prev = a ∨ prev < g := by
+        rcases hp with e | e | e
+        · exact Or.inr (Or.inl e)
+        · exact Or.inl e
+        · exact Or.inr (Or.inr e)
+      rcases hw.2.2.2.2.2 with ⟨hne, e | e⟩ | ⟨heq, e⟩
+      · simp only at hne e
+        right
+        refine scanPairs_complete _ v a b a_in b_in hne ?_ ?_
+        · rw [Bool.or_eq_true]; left
+          have := cand_ok y hy U a b g c rest S W hSW hv v hvn hvS Lv Rv prev hinv _ hIH hp false
+            (fun h => by simp at h)
+          rw [e] at this
+          exact this
+        · rw [Bool.or_eq_true]; left
+          have := cand_ok y hy U b a g c rest S W hSW hv' v hvn hvS Lv Rv prev hinv _ hIH hp' false
+            (fun h => by simp at h)
+          rw [e, Nat.and_comm] at this
+          exact this
+      · simp only at hne e
+        right
+        refine scanPairs_complete _ v a b a_in b_in hne ?_ ?_
+        · rw [Bool.or_eq_true]; right
+          have := cand_ok y hy U a b g c rest S W hSW hv v hvn hvS Lv Rv prev hinv _ hIH hp false
+            (fun h => by simp at h)
+          rw [e] at this
+          exact this
+        · rw [Bool.or_eq_true]; right
+          have := cand_ok y hy U b a g c rest S W hSW hv' v hvn hvS Lv Rv prev hinv _ hIH hp' false
+            (fun h => by simp at h)
+          rw [e, Nat.or_comm] at this
+          exact this
+      · simp only at heq e
+        left
+        refine List.any_eq_true.2 ⟨a, a_in, ?_⟩
+        have := cand_ok y hy U a b g c rest S W hSW hv v hvn hvS Lv Rv prev hinv _ hIH hp true
+          (fun _ => heq)
+        rw [e, ← heq] at this
+        exact this
