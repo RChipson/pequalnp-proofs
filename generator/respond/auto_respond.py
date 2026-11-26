@@ -11,8 +11,7 @@ Families (each handler returns the path of a Lean file that compiled, or None):
             (generator/promise/gennone.py) or a solver certificate (generator/lratfloor/mkfloor.py).
 
   python3 generator/respond/auto_respond.py <minutes> [dry]
-dry: build and compile, but do not ask the desk or submit.  Rows listed at start-up are not touched unless
-they were posted in the last few minutes (their id is among the 60 highest)."""
+dry: build and compile, but do not ask the desk or submit.  Rows already listed at start-up are not touched."""
 import fcntl, json, os, re, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); GEN = os.path.join(HERE, '..')
 sys.path.insert(0, os.path.join(GEN, 'promise')); sys.path.insert(0, os.path.join(GEN, 'mux'))
@@ -127,9 +126,8 @@ def send(step, out):
 def main():
     end = time.time() + 60 * float(sys.argv[1]); dry = len(sys.argv) > 2 and sys.argv[2] == 'dry'
     G = gaps()
-    top = sorted((num(i) for i in G), reverse=True)[:60]
-    seen = {i for i in G if num(i) < (top[-1] if top else 0)}
-    log('watching;', len(G), 'steps open;', len(G) - len(seen), 'recent ones will be looked at')
+    seen = set(G)
+    log('watching;', len(G), 'steps open; only rows posted from now on are answered')
     while time.time() < end:
         try: G = gaps()
         except Exception as e: time.sleep(20); continue
