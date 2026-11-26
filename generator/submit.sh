@@ -57,17 +57,24 @@ if grep -Eq '^[[:space:]]*(private |protected )?(inductive|structure|instance|cl
 
 TRAILER=$'Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01TpFXUkpyLFra3HXQJVTCWi'
 rm -rf $W/wt; git worktree prune; git branch -D $ID 2>/dev/null || true
-git worktree add -q -b $ID $W/wt upstream/main
-cp $F $W/wt/$F
-(cd $W/wt && git add $F && git -c commit.gpgsign=false -c user.name=RChipson \
-  -c user.email=213504381+RChipson@users.noreply.github.com commit -q -m "$ID")
+# ONE unsigned commit with the one file on top of the project's main branch, made without a checkout
+# (the project tree is large; a checkout cost many seconds)
+WHO=RChipson; MAIL=213504381+RChipson@users.noreply.github.com
+BLOB=$(git hash-object -w $F)
+rm -f $W/index
+GIT_INDEX_FILE=$W/index git read-tree upstream/main
+GIT_INDEX_FILE=$W/index git update-index --add --cacheinfo 100644,$BLOB,$F
+TREE=$(GIT_INDEX_FILE=$W/index git write-tree)
+COMMIT=$(GIT_AUTHOR_NAME=$WHO GIT_AUTHOR_EMAIL=$MAIL GIT_COMMITTER_NAME=$WHO GIT_COMMITTER_EMAIL=$MAIL git commit-tree $TREE -p upstream/main -m "$ID")
+[ "$(git diff --name-only upstream/main $COMMIT)" = "$F" ] || { echo "the commit does not hold exactly the one file"; exit 1; }
+git branch -f $ID $COMMIT
 rm -f $F
 echo "$ID $LEASE$NOTE" >> generator/pr-requests.txt
 git add generator/pr-requests.txt
 git commit -q -m "Request a pull request for $ID" -m "$TRAILER"
-for i in 1 2 3 4; do git push -q origin $ID && break; sleep $((2**i)); done
-for i in 1 2 3 4; do git push -q origin claude/optimistic-ride-tshloe && break; sleep $((2**i)); done
-echo "pushed $ID at $(git -C $W/wt rev-parse --short HEAD)$NOTE, $(date -u)"
+# both branches in one push: the proof branch, and the request that makes the fork's workflow open the pull request
+for i in 1 2 3 4; do git push -q origin $ID claude/optimistic-ride-tshloe && break; sleep $((2**i)); done
+echo "pushed $ID at $(git rev-parse --short $COMMIT)$NOTE, $(date -u)"
 
 # wait until the desk shows the pull request, then report it.  The lock is given up first; with BG_RELEASE=1
 # the wait runs in the background (the lease stays on its renewal job until the release), so that the caller
