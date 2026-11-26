@@ -284,5 +284,7 @@ while True:
         elif title.startswith(('False:', 'It is false that', 'No AND/OR', 'An AND/OR', 'Table 2:', 'At fan-in two, one NOT gate')):
             log('OTHER (a row at the conjectured bound)', step, '(held 20 minutes, then out_of_time unless handled)')
         else:
-            log('STOP: a step worth a real attempt:', step); print(r.stdout[:7000], flush=True); sys.exit(0)
+            # an unfamiliar step: it is held for twenty minutes and written to a file for a look; the loop goes on
+            log('LOOK: an unfamiliar step, held 20 minutes:', step, '|', title[:120])
+            open('/tmp/auto55_look.log', 'a').write(time.strftime('%H:%M:%S', time.gmtime()) + '\n' + r.stdout[:7000] + '\n=====\n')
     time.sleep(20)
