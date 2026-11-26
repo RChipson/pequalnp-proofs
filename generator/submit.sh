@@ -38,7 +38,8 @@ LEASE=$(python3 -c "import json;print(json.load(open('.pnp/$STEP.json'))['lease'
 CODE=$(curl -sS -m 30 -o $W/beat.json -w '%{http_code}' -X POST "https://pequalnp.com/desk/beat?lease=$LEASE")
 [ "$CODE" = 200 ] || { echo "the desk answered $CODE to the renewal: not sending"; exit 1; }
 
-git fetch -q upstream main
+# another job may be fetching at the same moment (the ref is then locked): in that case its result is as fresh
+git fetch -q upstream main 2>/dev/null || { sleep 2; git fetch -q upstream main 2>/dev/null || true; }
 # the base is pinned here: other jobs may fetch again while this one runs
 BASE=$(git rev-parse upstream/main)
 # the project's stop notice, and its rule that a recorded proof is final
