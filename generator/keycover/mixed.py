@@ -60,14 +60,14 @@ def cost_and_build(n, terms, rnd, build=False):
         else: gates.append(('or', acc, w)); acc = 2 * n + len(gates) - 1
     return gates, acc
 
-def best(n, mask, tries=6, seconds=8.0, seed=1):
+def best(n, mask, tries=6, seconds=8.0, seed=1, given=None):
     rnd = random.Random(seed)
     ones = lambda u, v: mask >> (n * u + v) & 1
     full_row = [all(ones(u, v) for v in range(n)) for u in range(n)]
     full_col = [all(ones(u, v) for u in range(n)) for v in range(n)]
     target = sum(1 << (u * n + v) for u in range(n) for v in range(n) if ones(u, v))
     bestc = None
-    for blocks in covers(n, mask, tries):
+    for blocks in (given if given is not None else covers(n, mask, tries)):
         B = [([u for u in range(n) if S >> u & 1], [v for v in range(n) if T >> v & 1]) for S, T in blocks]
         m = len(B)
         def ok(j, k):
