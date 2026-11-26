@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(GEN, 'promise')); sys.path.insert(0, os.path.joi
 import genprom, unread
 S = '/tmp/claude-0/-home-user-pequalnp-proofs/740307a3-5578-556b-b545-0397351cd4f4/scratchpad'
 os.chdir('/home/user/pequalnp-proofs')
-ENV = dict(os.environ, PATH=os.path.expanduser('~/.elan/bin') + ':' + os.environ['PATH'], NOCHECK='1')
+ENV = dict(os.environ, PATH=os.path.expanduser('~/.elan/bin') + ':' + os.environ['PATH'], NOCHECK='1', BG_RELEASE='1')
 D = f'{S}/desk/respond'; os.makedirs(D, exist_ok=True)
 P = 'PEqualNP.CircuitLowerBounds'
 def log(*a): print(time.strftime('%H:%M:%S', time.gmtime()), *a, flush=True)

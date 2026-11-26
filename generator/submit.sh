@@ -13,6 +13,8 @@
 # Set NOCHECK=1 to skip the local run of the project's checker afterwards.
 set -e
 ID=$1; SRC=$2
+# one submission at a time: the request file is committed in the shared working tree
+exec 9>/tmp/submit_sh.lock; flock 9
 S=${SCRATCH:-/tmp/claude-0/-home-user-pequalnp-proofs/740307a3-5578-556b-b545-0397351cd4f4/scratchpad}
 cd /home/user/pequalnp-proofs
 case "$ID" in
@@ -67,16 +69,27 @@ for i in 1 2 3 4; do git push -q origin $ID && break; sleep $((2**i)); done
 for i in 1 2 3 4; do git push -q origin claude/optimistic-ride-tshloe && break; sleep $((2**i)); done
 echo "pushed $ID at $(git -C $W/wt rev-parse --short HEAD)$NOTE, $(date -u)"
 
-# wait until the desk shows the pull request, then report it
+# wait until the desk shows the pull request, then report it.  The lock is given up first; with BG_RELEASE=1
+# the wait runs in the background (the lease stays on its renewal job until the release), so that the caller
+# can go on to its next step.
+flock -u 9; exec 9>&-
 REASON=submitted; [ "${ID#R-}" != "$ID" ] && REASON=reduced
-for i in $(seq 1 30); do
-  sleep 30
-  # our own pull request, not somebody else's on the same step
-  if [ "$(gh api -X GET search/issues -f q="repo:open-goat/pequalnp-proofs is:pr is:open author:RChipson in:title $ID" --jq '[.items[] | select(.title == "'$ID'")] | length' 2>/dev/null)" = 1 ]; then
-    python3 generator/desk.py release $STEP $REASON; break
-  fi
-  [ $i = 30 ] && echo "no pull request seen after 15 minutes: lease NOT released, look at the workflow run"
-done
+wait_and_release() {
+  for i in $(seq 1 90); do
+    sleep 10
+    # our own pull request, not somebody else's on the same step
+    if [ "$(gh api -X GET search/issues -f q="repo:open-goat/pequalnp-proofs is:pr author:RChipson in:title $ID" --jq '[.items[] | select(.title == "'$ID'")] | length' 2>/dev/null)" = 1 ]; then
+      python3 generator/desk.py release $STEP $REASON; break
+    fi
+    [ $i = 90 ] && echo "no pull request seen after 15 minutes: lease NOT released, look at the workflow run"
+  done
+}
+if [ -n "$BG_RELEASE" ]; then
+  ( wait_and_release > /tmp/release_$ID.log 2>&1 & )
+  echo "release of $STEP follows in the background once the pull request shows"
+  exit 0
+fi
+wait_and_release
 if [ -z "$NOCHECK" ] && [ "${ID#L-}" != "$ID" ]; then
   cp "$SRC" $F
   (export PATH=$HOME/.elan/bin:$PATH; flock /tmp/lean.lock node tools/check-lean.mjs $F $W/statement.txt check > $W/checker.log 2>&1; echo "exit $?" >> $W/checker.log; rm -f $F) > /dev/null 2>&1 &

@@ -305,7 +305,7 @@ while True:
         if rc == 0 and str(g.get('pr_open', '0')) in ('0', 'None'):
             c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
             if c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr):
-                s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
                 log('SENT', step, '|', msg, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
             else:
                 log('promise row', step, ': the proof does not compile; handing back after 20 minutes')
