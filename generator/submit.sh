@@ -42,15 +42,14 @@ git fetch -q upstream main
 # the project's stop notice, and its rule that a recorded proof is final
 if git cat-file -e upstream/main:STOP 2>/dev/null; then echo "STOPPED by a notice on the proofs repository: nothing is sent"; exit 120; fi
 if git cat-file -e upstream/main:$F 2>/dev/null; then echo "$ID was just proved by someone else (its file is on main): nothing is sent"; exit 1; fi
-cp "$SRC" $F
-# the copy in the working tree is only for the guard and the commit: it is removed however the script ends
-trap 'rm -f "$F"' EXIT
+# the file is read from a copy in the scratch folder; nothing is written into the repository's working tree
+COPY=$W/proof.lean; cp "$SRC" $COPY
 curl -s https://data.pequalnp.com/data/desk/gaps.json -o $W/gaps.json
 if [ "${ID#L-}" != "$ID" ]; then
   # the project's current guard, read from its main branch
   git show upstream/main:.github/scripts/outside-guard.mjs > $W/outside-guard.mjs
   node $W/outside-guard.mjs gap $W/gaps.json $ID $F $W check | tail -1
-  node $W/outside-guard.mjs imports $F $W/imports.json $F check | tail -1
+  node $W/outside-guard.mjs imports $COPY $W/imports.json $F check | tail -1
   python3 -c "import json;open('$W/lease-statement.txt','w').write(json.load(open('.pnp/$STEP.json'))['gap']['statement'])"
   cmp $W/statement.txt $W/lease-statement.txt
 fi
@@ -62,7 +61,7 @@ rm -rf $W/wt; git worktree prune; git branch -D $ID 2>/dev/null || true
 # ONE unsigned commit with the one file on top of the project's main branch, made without a checkout
 # (the project tree is large; a checkout cost many seconds)
 WHO=RChipson; MAIL=213504381+RChipson@users.noreply.github.com
-BLOB=$(git hash-object -w $F)
+BLOB=$(git hash-object -w $COPY)
 rm -f $W/index
 GIT_INDEX_FILE=$W/index git read-tree upstream/main
 GIT_INDEX_FILE=$W/index git update-index --add --cacheinfo 100644,$BLOB,$F
@@ -70,7 +69,6 @@ TREE=$(GIT_INDEX_FILE=$W/index git write-tree)
 COMMIT=$(GIT_AUTHOR_NAME=$WHO GIT_AUTHOR_EMAIL=$MAIL GIT_COMMITTER_NAME=$WHO GIT_COMMITTER_EMAIL=$MAIL git commit-tree $TREE -p upstream/main -m "$ID")
 [ "$(git diff --name-only upstream/main $COMMIT)" = "$F" ] || { echo "the commit does not hold exactly the one file"; exit 1; }
 git branch -f $ID $COMMIT
-rm -f $F
 echo "$ID $LEASE$NOTE" >> generator/pr-requests.txt
 git add generator/pr-requests.txt
 git commit -q -m "Request a pull request for $ID" -m "$TRAILER"
@@ -104,4 +102,5 @@ wait_and_release
 if [ -z "$NOCHECK" ] && [ "${ID#L-}" != "$ID" ]; then
   cp "$SRC" $F
   (export PATH=$HOME/.elan/bin:$PATH; flock /tmp/lean.lock node tools/check-lean.mjs $F $W/statement.txt check > $W/checker.log 2>&1; echo "exit $?" >> $W/checker.log; rm -f $F) > /dev/null 2>&1 &
+  rm -f $F
 fi
