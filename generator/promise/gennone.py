@@ -103,7 +103,7 @@ theorem {ns} : {stmt} := by
 
 def main():
     step, sf, out = sys.argv[1:4]
-    stmt = open(sf).read().strip(); m = PAT.fullmatch(stmt)
+    stmt = open(sf).read().strip(); m = PAT.fullmatch(' '.join(stmt.split()))      # the statement is kept as posted; only the match ignores spacing
     if not m or m.group(2) != m.group(4): print('not a row of this family'); return 2
     k, n, mask = int(m.group(1)), int(m.group(2)), int(m.group(3))
     best = samples(n, mask, k)

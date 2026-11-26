@@ -16,7 +16,7 @@ def log(*a): print(time.strftime('%H:%M:%S', time.gmtime()), *a, flush=True)
 d = f'{S}/desk/promise/neg'; os.makedirs(d, exist_ok=True)
 MEMO = f'{d}/memo.json'
 memo = json.load(open(MEMO)) if os.path.exists(MEMO) else {}
-G = gaps(); ids = [a for a in sys.argv[1:] if a.startswith('L-')] or sorted(i for i, g in G.items() if g.get('statement', '').startswith(PRE))
+G = gaps(); ids = [a for a in sys.argv[1:] if a.startswith('L-')] or sorted(i for i, g in G.items() if ' '.join(g.get('statement', '').split()).startswith(PRE))
 now = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime())
 for step in ids:
     if memo.get(step, {}).get('after', '') > now or memo.get(step, {}).get('sent') or memo.get(step, {}).get('noproof'): continue
