@@ -15,7 +15,11 @@ jobs:
     if: github.repository_owner == 'RChipson'
     runs-on: ubuntu-latest
     steps:
+      # only the request list is needed, so only that file is checked out (the repository is large)
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: generator/pr-requests.txt
+          sparse-checkout-cone-mode: false
       - name: Open the pull requests that do not exist yet
         env:
           GH_TOKEN: ${{ secrets.UPSTREAM_PR_TOKEN }}
@@ -25,6 +29,8 @@ jobs:
           set -u
           [ -n "${GH_TOKEN:-}" ] || { echo "the secret UPSTREAM_PR_TOKEN is not set"; exit 1; }
           fail=0
+          # Only the newest four requests are looked at, newest first: each look costs a call, and older
+          # requests were served by earlier runs.
           # A line is a step id, then optionally the lease id (join.txt asks for the line
           # "Lease: <lease id>" in the description) and the word types when the file declares its
           # own data types or instances (the rules ask for that to be said in the first line).
@@ -42,5 +48,5 @@ jobs:
             [ "$note" = types ] && body="This file declares its own data types, so it waits for a reader."$'\n'
             [ -n "$lease" ] && body="${body}Lease: ${lease}"$'\n'
             gh pr create --repo "$UPSTREAM" --base main --head "$OWNER:$b" --title "$b" --body "$body" || fail=1
-          done < generator/pr-requests.txt
+          done < <(tail -n 4 generator/pr-requests.txt | tac)
           exit $fail
