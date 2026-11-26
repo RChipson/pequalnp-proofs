@@ -73,7 +73,9 @@ echo "$ID $LEASE$NOTE" >> generator/pr-requests.txt
 git add generator/pr-requests.txt
 git commit -q -m "Request a pull request for $ID" -m "$TRAILER"
 # both branches in one push: the proof branch, and the request that makes the fork's workflow open the pull request
-for i in 1 2 3 4; do git push -q origin $ID claude/optimistic-ride-tshloe && break; sleep $((2**i)); done
+PUSHED=""
+for i in 1 2 3 4; do git push -q origin $ID claude/optimistic-ride-tshloe && { PUSHED=1; break; }; sleep $((2**i)); done
+[ -n "$PUSHED" ] || { echo "the push was refused four times: NOT sent (is there already a branch $ID on the fork?)"; exit 1; }
 echo "pushed $ID at $(git rev-parse --short $COMMIT)$NOTE, $(date -u)"
 
 # wait until the desk shows the pull request, then report it.  The lock is given up first; with BG_RELEASE=1
