@@ -281,17 +281,16 @@ while True:
             else:
                 log('six-input refutation row', step, ': twin not proved (', why[:120], '); handing back after 20 minutes')
     elif 'is represented on the one-a-side promise by an AND/OR/NOT circuit' in title and not stmt.startswith('¬'):
-        # a "find" row of the promise family: an exhaustive SAT search (generator/promise/genprom.py) decides
-        # whether a circuit within the bar exists.  If it does, the circuit is the proof; if the search ends
-        # without one, the row is handed back at once as statement_seems_false; if it does not end in ten
-        # minutes, the row is handed back after twenty minutes as usual.
+        # a "find" row of the promise family (generator/promise/quick_find.py): if a circuit within the bar is
+        # found it is the proof; if the exhaustive search (bars up to 7 gates) ends without one, the row is
+        # handed back at once as statement_seems_false; otherwise it is handed back after twenty minutes.
         dm = f'{S}/desk/promise/pos'; os.makedirs(dm, exist_ok=True)
         sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
         try:
-            rr = subprocess.run(['python3', 'generator/promise/genprom.py', 'lean', step, sf, om], capture_output=True, text=True, timeout=600)
+            rr = subprocess.run(['python3', 'generator/promise/quick_find.py', step, sf, om], capture_output=True, text=True, timeout=400)
             rc, msg = rr.returncode, rr.stdout.strip()[-90:]
         except subprocess.TimeoutExpired:
-            rc, msg = 3, 'the search did not end in ten minutes'
+            rc, msg = 3, 'the search did not end in time'
         if rc == 0 and str(g.get('pr_open', '0')) in ('0', 'None'):
             c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
             if c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr):
