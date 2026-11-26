@@ -136,7 +136,13 @@ ASK = 0
 for st in held():
     r0 = open(f'/tmp/reason_{st}').read().strip() if os.path.exists(f'/tmp/reason_{st}') else 'out_of_time'
     hold(st, r0)
+# a bounded run: after this many minutes no new step is asked for and the loop ends by itself (steps
+# still held keep their renewal jobs, which hand them back on schedule)
+MINUTES = int(sys.argv[sys.argv.index('--minutes') + 1]) if '--minutes' in sys.argv else 100
+T_END = time.time() + MINUTES * 60
 while True:
+    if time.time() > T_END:
+        log('bounded run over after', MINUTES, 'minutes; held now:', held()); break
     if len(held()) >= 4:        # one of the five places stays free, so that a proved twin can always be leased
         time.sleep(30); continue
     ASK += 1
