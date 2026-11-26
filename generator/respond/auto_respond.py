@@ -7,6 +7,8 @@ Families (each handler returns the path of a Lean file that compiled, or None):
             circuit, replayed by the kernel.
   find      "an AND/OR/NOT circuit of at most k gates represents the graph with mask M on the promise": SAT
             search for the circuit (generator/promise/genprom.py, xorsynth.py).
+  graph     the same kind of row for a graph given by an expression (crown, staircase, chain ...), with or
+            without NOT gates: Lean prints the table, then the search runs (generator/encoder/msynth.py).
   floor     "no AND/OR/NOT circuit of at most k gates represents ...": the free-NOT sample search
             (generator/promise/gennone.py) or a solver certificate (generator/lratfloor/mkfloor.py).
 
@@ -107,7 +109,77 @@ def h_floor(step, g, stmt):
     if r.returncode != 0 or os.path.getsize(out) > 500 * 1024: return None
     return out if compiles(out) else None
 
-HANDLERS = [('gift', h_gift), ('find', h_find), ('floor', h_floor)]
+REP_MONO = re.compile(r'PEqualNP\.Represents\.RepSizeAtMost \((fun u v : Fin (\d+) => .*)\) (\d+)', re.S)
+REP_NOT = re.compile(r'∃ C : PEqualNP\.CircuitLowerBounds\.Circuit,\s*PEqualNP\.MetaComplexity\.FanInTwo C ∧ C\.size ≤ (\d+) ∧\s*PEqualNP\.Represents\.Represents \((fun u v : Fin (\d+) => .*)\) C', re.S)
+def table_of(step, fn, n):
+    """the n by n table of the posted graph expression, read off by Lean itself (a local run, not part of any proof)"""
+    f = f'{D}/table_{step.replace("-", "_")}.lean'
+    open(f, 'w').write(f'import Mathlib\nimport PEqualNP.Defs\n#eval (List.finRange {n}).map fun a => (List.finRange {n}).map fun b => (({fn}) a b : Bool)\n')
+    c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 300 lake env lean {f}', shell=True, capture_output=True, text=True, env=ENV)
+    m = re.search(r'\[\[.*\]\]', c.stdout, re.S)
+    if c.returncode or not m: return None
+    rows = [[x.strip() == 'true' for x in r.split(',')] for r in re.findall(r'\[([a-z, \n]+)\]', m.group(0))]
+    return rows if len(rows) == n and all(len(r) == n for r in rows) else None
+
+def h_graph(step, g, stmt):
+    """a find row on a graph given by an expression: monotone (RepSizeAtMost) or with NOT gates"""
+    m = REP_MONO.fullmatch(stmt); mono = True
+    if m: fn, n, bar = m.group(1), int(m.group(2)), int(m.group(3))
+    else:
+        m = REP_NOT.fullmatch(stmt); mono = False
+        if not m: return None
+        bar, fn, n = int(m.group(1)), m.group(2), int(m.group(3))
+    if n > 6 or bar > 12: return None
+    T = table_of(step, fn, n)
+    if T is None: return None
+    mask = sum(1 << (n * u + v) for u in range(n) for v in range(n) if T[u][v])
+    code = """
+import sys
+sys.path.insert(0, %r); sys.path.insert(0, %r); sys.path.insert(0, %r)
+n, mask, bar, mono = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), sys.argv[4] == '1'
+if mono:
+    from msynth import search
+    rows = [((1 << u) | (1 << (n + v)), mask >> (n * u + v) & 1) for u in range(n) for v in range(n)]
+    R = len(rows); incols = [sum(1 << r for r in range(R) if rows[r][0] >> i & 1) for i in range(2 * n)]
+    target = sum(1 << r for r in range(R) if rows[r][1])
+    for G in range(1, bar + 1):
+        res = search(2 * n, incols, R, [target], G, 'andor', 60)
+        if isinstance(res, tuple): print(repr((res[0], res[1][0]))); sys.exit(0)
+        if res == 'timeout': break
+else:
+    import genprom
+    for k in range(1, min(bar, 8) + 1):
+        c = genprom.circuit(n, mask, k)
+        if c: print(repr(([(t, a, b) for t, a, b in c], 2 * n + len(c) - 1))); sys.exit(0)
+print('None')
+""" % (os.path.join(GEN, 'promise'), os.path.join(GEN, 'mux'), os.path.join(GEN, 'encoder'))
+    try: o = subprocess.run(['python3', '-c', code, str(n), str(mask), str(bar), '1' if mono else '0'], capture_output=True, text=True, timeout=200).stdout.strip()
+    except subprocess.TimeoutExpired: return None
+    if not o.startswith('('): return None
+    gl, outw = eval(o)
+    gates = [(t, [a] if t == 'not' else [a, b]) for t, a, b in gl]
+    out = f'{D}/{step.replace("-", "_")}.lean'
+    open(out, 'w').write(witness_lean(step, stmt, gates, outw))
+    return out if compiles(out) else None
+
+
+HANDLERS = [('gift', h_gift), ('find', h_find), ('floor', h_floor), ('graph', h_graph)]
+
+RETRY = f'{D}/retry.json'
+def remember(step, out, after):
+    """a proof that is ready while another agent has a head start: come back when the desk said"""
+    q = json.load(open(RETRY)) if os.path.exists(RETRY) else {}
+    q[step] = {'out': out, 'after': after}; json.dump(q, open(RETRY, 'w'))
+def retry_due(G):
+    if not os.path.exists(RETRY): return
+    q = json.load(open(RETRY)); now = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(time.time() - 3))
+    for step, e in list(q.items()):
+        if step not in G or not is_open(G[step]):
+            del q[step]; json.dump(q, open(RETRY, 'w')); log(step, 'is closed or has a pull request; ready proof dropped'); continue
+        if e['after'] > now: continue
+        del q[step]; json.dump(q, open(RETRY, 'w'))
+        log(step, 'head start over; bringing the ready proof back')
+        send(step, e['out'])
 
 def send(step, out):
     with open('/tmp/submit.lock', 'w') as lk:
@@ -117,7 +189,10 @@ def send(step, out):
         except Exception: pass
         nx = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--proof-of', step], capture_output=True, text=True)
         m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', nx.stdout, re.M)
-        if not m or m.group(1) != step: log(step, 'not handed to us:', nx.stdout.strip()[:150], '| proof kept at', out); return False
+        if not m or m.group(1) != step:
+            mm = re.search(r'back after (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)', nx.stdout)
+            if mm: remember(step, out, mm.group(1))
+            log(step, 'not handed to us:', nx.stdout.strip()[:150], '| proof kept at', out); return False
         subprocess.Popen(['bash', 'generator/hold.sh', step, 'out_of_time', '20'], stdout=open(f'/tmp/hold_{step}.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
         s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=ENV)
         log('SENT', step, (s.stdout + s.stderr).strip().split('\n')[-1][:200])
@@ -131,6 +206,7 @@ def main():
     while time.time() < end:
         try: G = gaps()
         except Exception as e: time.sleep(20); continue
+        retry_due(G)
         new = sorted((i for i in G if i not in seen), key=num)
         for step in new:
             seen.add(step); g = G[step]
