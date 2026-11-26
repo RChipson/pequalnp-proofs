@@ -18,7 +18,7 @@ def mux_fn(a):
     return n, f
 
 class Synth:
-    def __init__(self, n, k):
+    def __init__(self, n, k, order=False):
         self.n, self.k = n, k; self.nv = 0; self.s = Cadical153()
         self.typ = []; self.sa = []; self.sb = []
         for g in range(k):
@@ -35,6 +35,18 @@ class Synth:
                     if i >= j: self.s.add_clause([t[2], -a[i], -b[j]])
                     if i != j: self.s.add_clause([-t[2], -a[i], -b[j]])
             self.typ.append(t); self.sa.append(a); self.sb.append(b)
+        # order: two neighbouring gates where the later does not read the earlier could be swapped, so ask the
+        # earlier one to have the smaller pair (second operand, first operand).  Any circuit can be sorted so.
+        if order:
+            for g in range(k - 1):
+                W = n + g
+                u = [self.sa[g + 1][W], self.sb[g + 1][W]]
+                for i in range(W):
+                    for j in range(i):
+                        self.s.add_clause(u + [-self.sb[g][i], -self.sb[g + 1][j]])
+                    for p_ in range(W):
+                        for q in range(p_):
+                            self.s.add_clause(u + [-self.sb[g][i], -self.sb[g + 1][i], -self.sa[g][p_], -self.sa[g + 1][q]])
         # every gate except the last is used by a later gate
         for g in range(k - 1):
             w = n + g

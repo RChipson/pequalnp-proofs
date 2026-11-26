@@ -27,7 +27,7 @@ def circuit(n, mask, k):
     """A circuit with exactly k gates, or None."""
     rows = rows_of(n, mask)
     if k == 0: return None
-    S = synth_not.Synth(2 * n, k)
+    S = synth_not.Synth(2 * n, k, True)
     for x, o in rows: S.add_row(x, o)
     return S.solve()
 
