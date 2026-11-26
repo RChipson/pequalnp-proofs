@@ -235,9 +235,12 @@ def send(step, out):
             if mm: remember(step, out, mm.group(1))
             log(step, 'not handed to us:', nx.stdout.strip()[:150], '| proof kept at', out); return False
         subprocess.Popen(['bash', 'generator/hold.sh', step, 'out_of_time', '20'], stdout=open(f'/tmp/hold_{step}.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
-        s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=ENV)
-        log('SENT', step, (s.stdout + s.stderr).strip().split('\n')[-1][:200])
-        return True
+        for attempt in (1, 2):
+            s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=ENV)
+            if 'pushed ' in s.stdout: log('SENT', step, (s.stdout + s.stderr).strip().split('\n')[-1][:200]); return True
+            time.sleep(3)
+        log('NOT sent', step, ':', (s.stdout + s.stderr).strip().split('\n')[-1][:200], '(the lease stays on its renewal job and is handed back by it)')
+        return False
 
 def answer(step, g, dry):
     stmt = g.get('statement', '').strip()
