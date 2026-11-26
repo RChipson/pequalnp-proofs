@@ -4,7 +4,7 @@ graph with mask M on the one-a-side promise).  For every open row without a pull
 circuit that leaves the classes of equal rows / equal columns unread (unread.py), write the proof
 (genprom.lean), compile it, ask the desk for the step with --proof-of and submit.
 
-  python3 generator/promise/send_unread.py <worker index> <workers> <seconds per search> <minutes> [fast|full]\nfast: only the quick shapes of xorsynth.py; full: then the general search of unread.py as well."""
+  python3 generator/promise/send_unread.py <worker index> <workers> <seconds per search> <minutes> [fast|full]\nfast: only the quick shapes of xorsynth.py; full: then the general search of unread.py as well;\ngeneral: the unrestricted search of genprom.py on all inputs (slow)."""
 import fcntl, json, os, random, re, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, '..', 'mux'))
 import genprom, unread
@@ -23,6 +23,10 @@ import sys
 sys.path.insert(0, %r); sys.path.insert(0, %r)
 import unread, xorsynth
 n, mask, k, fast = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), sys.argv[4] == 'fast'
+if sys.argv[4] == 'general':
+    import genprom
+    g = genprom.circuit(n, mask, k)
+    print(('CIRCUIT ' + repr(g)) if g and unread.check(n, mask, g) else 'none'); sys.exit(0)
 g = xorsynth.find(n, mask, k, 300)
 if g and unread.check(n, mask, g): print('CIRCUIT', repr(g)); sys.exit(0)
 if fast: print('none of the quick shapes'); sys.exit(0)
