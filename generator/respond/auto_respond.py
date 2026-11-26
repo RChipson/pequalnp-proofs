@@ -222,8 +222,10 @@ def main():
         except Exception as e: time.sleep(20); continue
         retry_due(G)
         now = time.time()
+        fresh = False
         for i in G:
-            if i not in seen and i not in first: first[i] = now
+            if i not in seen and i not in first: first[i] = now; fresh = True
+        if fresh: open('/tmp/ask_now', 'w').write(str(now))      # tells the desk loop to ask for work now
         busy = {i: f for i, f in busy.items() if not f.done()}
         # newest rows first; a row that has waited more than 90 seconds is left alone (someone holds it by then)
         todo = sorted((i for i in first if i not in seen), key=num, reverse=True)

@@ -10,7 +10,7 @@ import synth_not
 PAT = re.compile(r'∃ C : PEqualNP\.CircuitLowerBounds\.Circuit, PEqualNP\.MetaComplexity\.FanInTwo C ∧ \(∃ g ∈ C\.gates, g\.op = PEqualNP\.CircuitLowerBounds\.GateOp\.not ∧ g\.inputs\.length = 1\) ∧ C\.size ≤ (\d+) ∧ ∀ x : Fin (\d+) → Bool, C\.eval \(List\.ofFn x\) = Nat\.testBit \((\d+) \* 2 \^ 32 \+ (\d+)\) \(∑ i : Fin \d+, if x i then 2 \^ \(i : ℕ\) else 0\)')
 
 def find(n, T, k):
-    S = synth_not.Synth(n, k)
+    S = synth_not.Synth(n, k, True)
     S.s.add_clause([S.typ[g][2] for g in range(k)])          # at least one NOT
     for x in range(1 << n): S.add_row(x, bool(T >> x & 1))
     return S.solve()

@@ -147,10 +147,21 @@ while True:
         time.sleep(30); continue
     ASK += 1
     extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'search', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'open']][ASK % 5]
+    # the responder (generator/respond/auto_respond.py) touches /tmp/ask_now when the desk's list shows new rows;
+    # for a short while after that the request is for solid prove steps, the kind those rows are
+    burst = os.path.exists('/tmp/ask_now') and time.time() - os.path.getmtime('/tmp/ask_now') < 45
+    if burst: extra = ['--kind', 'prove', '--level', 'solid']
+    asked_at = time.time()
     r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
     m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
     if not m:
-        log('none', extra, ':', r.stdout.strip().split('\n')[0][:100]); time.sleep(150 if 'checker is behind' in r.stdout else 20); continue
+        log('none', extra, ':', r.stdout.strip().split('\n')[0][:100])
+        # wait 20 seconds (150 if the checker is behind), or less when the responder reports new rows meanwhile
+        t_wait = time.time() + (150 if 'checker is behind' in r.stdout else 20)
+        while time.time() < t_wait:
+            if os.path.exists('/tmp/ask_now') and os.path.getmtime('/tmp/ask_now') > asked_at and time.time() - asked_at > 3: break
+            time.sleep(1)
+        continue
     step = m.group(1)
     d = json.load(open(f'.pnp/{step}.json')); g = d['gap']; stmt = g['statement'].strip(); title = g.get('title', '')
     log('GIVEN', step, '|', title[:110], '| pr_open', g.get('pr_open'), '| terms', (d['lease'].get('terms') or {}))
