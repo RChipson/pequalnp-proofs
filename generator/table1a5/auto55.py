@@ -194,7 +194,7 @@ while True:
             ok = rr.returncode == 0
             if ok:
                 c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
-                ok = c.returncode == 0 and not re.search(r'\\berror\\b', c.stdout + c.stderr)
+                ok = c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr)
             if ok:
                 s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
                 log('SENT', step, '|', rr.stdout.strip()[-60:], '|', (s.stdout + s.stderr).strip().split('\\n')[-1][:200])
