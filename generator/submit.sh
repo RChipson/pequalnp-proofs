@@ -39,15 +39,17 @@ CODE=$(curl -sS -m 30 -o $W/beat.json -w '%{http_code}' -X POST "https://pequaln
 [ "$CODE" = 200 ] || { echo "the desk answered $CODE to the renewal: not sending"; exit 1; }
 
 git fetch -q upstream main
+# the base is pinned here: other jobs may fetch again while this one runs
+BASE=$(git rev-parse upstream/main)
 # the project's stop notice, and its rule that a recorded proof is final
-if git cat-file -e upstream/main:STOP 2>/dev/null; then echo "STOPPED by a notice on the proofs repository: nothing is sent"; exit 120; fi
-if git cat-file -e upstream/main:$F 2>/dev/null; then echo "$ID was just proved by someone else (its file is on main): nothing is sent"; exit 1; fi
+if git cat-file -e $BASE:STOP 2>/dev/null; then echo "STOPPED by a notice on the proofs repository: nothing is sent"; exit 120; fi
+if git cat-file -e $BASE:$F 2>/dev/null; then echo "$ID was just proved by someone else (its file is on main): nothing is sent"; exit 1; fi
 # the file is read from a copy in the scratch folder; nothing is written into the repository's working tree
 COPY=$W/proof.lean; cp "$SRC" $COPY
 curl -s https://data.pequalnp.com/data/desk/gaps.json -o $W/gaps.json
 if [ "${ID#L-}" != "$ID" ]; then
   # the project's current guard, read from its main branch
-  git show upstream/main:.github/scripts/outside-guard.mjs > $W/outside-guard.mjs
+  git show $BASE:.github/scripts/outside-guard.mjs > $W/outside-guard.mjs
   node $W/outside-guard.mjs gap $W/gaps.json $ID $F $W check | tail -1
   node $W/outside-guard.mjs imports $COPY $W/imports.json $F check | tail -1
   python3 -c "import json;open('$W/lease-statement.txt','w').write(json.load(open('.pnp/$STEP.json'))['gap']['statement'])"
@@ -63,11 +65,11 @@ rm -rf $W/wt; git worktree prune; git branch -D $ID 2>/dev/null || true
 WHO=RChipson; MAIL=213504381+RChipson@users.noreply.github.com
 BLOB=$(git hash-object -w $COPY)
 rm -f $W/index
-GIT_INDEX_FILE=$W/index git read-tree upstream/main
+GIT_INDEX_FILE=$W/index git read-tree $BASE
 GIT_INDEX_FILE=$W/index git update-index --add --cacheinfo 100644,$BLOB,$F
 TREE=$(GIT_INDEX_FILE=$W/index git write-tree)
-COMMIT=$(GIT_AUTHOR_NAME=$WHO GIT_AUTHOR_EMAIL=$MAIL GIT_COMMITTER_NAME=$WHO GIT_COMMITTER_EMAIL=$MAIL git commit-tree $TREE -p upstream/main -m "$ID")
-[ "$(git diff --name-only upstream/main $COMMIT)" = "$F" ] || { echo "the commit does not hold exactly the one file"; exit 1; }
+COMMIT=$(GIT_AUTHOR_NAME=$WHO GIT_AUTHOR_EMAIL=$MAIL GIT_COMMITTER_NAME=$WHO GIT_COMMITTER_EMAIL=$MAIL git commit-tree $TREE -p $BASE -m "$ID")
+[ "$(git diff --name-only $BASE $COMMIT)" = "$F" ] || { echo "the commit does not hold exactly the one file"; exit 1; }
 git branch -f $ID $COMMIT
 echo "$ID $LEASE$NOTE" >> generator/pr-requests.txt
 git add generator/pr-requests.txt
