@@ -43,6 +43,8 @@ git fetch -q upstream main
 if git cat-file -e upstream/main:STOP 2>/dev/null; then echo "STOPPED by a notice on the proofs repository: nothing is sent"; exit 120; fi
 if git cat-file -e upstream/main:$F 2>/dev/null; then echo "$ID was just proved by someone else (its file is on main): nothing is sent"; exit 1; fi
 cp "$SRC" $F
+# the copy in the working tree is only for the guard and the commit: it is removed however the script ends
+trap 'rm -f "$F"' EXIT
 curl -s https://data.pequalnp.com/data/desk/gaps.json -o $W/gaps.json
 if [ "${ID#L-}" != "$ID" ]; then
   # the project's current guard, read from its main branch
