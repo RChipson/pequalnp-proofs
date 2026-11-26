@@ -333,6 +333,28 @@ while True:
             open(f'/tmp/reason_{step}', 'w').write('statement_seems_false'); log('rectangular row', step, ':', msg)
         else:
             log('rectangular row', step, ':', msg)
+    elif title.startswith('The two-lit function'):
+        # one or two points lit: a gate list in the notes is replayed (generic provers); otherwise exact search
+        dm = f'{S}/desk/twolit'; os.makedirs(dm, exist_ok=True)
+        sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
+        rc, msg = 3, ''
+        tu = subprocess.run(['python3', 'generator/respond/try_unit.py', step], capture_output=True, text=True)
+        if tu.returncode == 0: om = tu.stdout.strip().split('\n')[-1]; rc, msg = 0, 'generic prover'
+        else:
+            try:
+                rr = subprocess.run(['python3', 'generator/twolit/twolit.py', step, sf, om, '90'], capture_output=True, text=True, timeout=120)
+                rc, msg = rr.returncode, rr.stdout.strip()[-70:]
+            except subprocess.TimeoutExpired: rc, msg = 3, 'not finished in time'
+            if rc == 0:
+                c = subprocess.run(f'cd {S}/up/lean && timeout 900 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
+                if c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr): rc, msg = 3, 'the proof does not compile'
+        if rc == 0:
+            s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
+            log('SENT', step, '|', msg, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
+        elif rc == 1:
+            open(f'/tmp/reason_{step}', 'w').write('statement_seems_false'); log('two-lit row', step, ':', msg)
+        else:
+            log('two-lit row', step, ':', msg)
     elif 'with a one-input NOT gate computes f' in title and title.startswith('Six-input monotone f'):
         # a circuit with a NOT gate tying the AND/OR size: exhaustive SAT search (generator/monot/gen1n.py)
         dm = f'{S}/desk/monot/auto'; os.makedirs(dm, exist_ok=True)
@@ -427,7 +449,7 @@ while True:
     working = subprocess.run(['pgrep', '-f', f'deep.py {step} '], capture_output=True).returncode == 0 or os.path.exists(f'/tmp/keep_{step}')
     # families that have their own rule above were already searched; the generic provers are for the rest
     own_rule = any(k in title for k in ('is represented on the one-a-side promise by an AND/OR', 'with a one-input NOT gate computes f',
-                                         'has a fan-in-two AND/OR circuit of at most', 'Rectangles:'))
+                                         'has a fan-in-two AND/OR circuit of at most', 'Rectangles:', 'The two-lit function'))
     if os.path.exists(f'.pnp/{step}.json') and not sent and not working and not own_rule:
         # before a unit goes back: the generic provers (generator/respond/try_unit.py)
         try:

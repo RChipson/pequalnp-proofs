@@ -186,7 +186,15 @@ print('None')
     return out if compiles(out) else None
 
 
-HANDLERS = [('gift', h_gift), ('find', h_find), ('floor', h_floor), ('graph', h_graph)]
+def h_twolit(step, g, stmt):
+    """two-lit rows without a gate list in the notes: exact search (generator/twolit/twolit.py)"""
+    if 'k = i ∨ k = j' not in stmt: return None
+    sf = f'{D}/stmt_{step}.txt'; open(sf, 'w').write(stmt); out = f'{D}/{step.replace("-", "_")}.lean'
+    try: r = subprocess.run(['python3', os.path.join(GEN, 'twolit', 'twolit.py'), step, sf, out, '60'], capture_output=True, text=True, timeout=90)
+    except subprocess.TimeoutExpired: return None
+    return out if r.returncode == 0 and compiles(out) else None
+
+HANDLERS = [('gift', h_gift), ('find', h_find), ('twolit', h_twolit), ('floor', h_floor), ('graph', h_graph)]
 
 RETRY = f'{D}/retry.json'
 import threading
