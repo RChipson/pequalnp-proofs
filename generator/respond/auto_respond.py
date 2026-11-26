@@ -189,18 +189,26 @@ print('None')
 HANDLERS = [('gift', h_gift), ('find', h_find), ('floor', h_floor), ('graph', h_graph)]
 
 RETRY = f'{D}/retry.json'
+import threading
+_RL = threading.Lock()
+def _q_load():
+    try: return json.load(open(RETRY))
+    except Exception: return {}
+def _q_save(q):
+    tmp = RETRY + '.tmp%d' % threading.get_ident(); json.dump(q, open(tmp, 'w')); os.replace(tmp, RETRY)
 def remember(step, out, after):
     """a proof that is ready while another agent has a head start: come back when the desk said"""
-    q = json.load(open(RETRY)) if os.path.exists(RETRY) else {}
-    q[step] = {'out': out, 'after': after}; json.dump(q, open(RETRY, 'w'))
+    with _RL:
+        q = _q_load(); q[step] = {'out': out, 'after': after}; _q_save(q)
 def retry_due(G):
-    if not os.path.exists(RETRY): return
-    q = json.load(open(RETRY)); now = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(time.time() - 3))
+    with _RL: q = _q_load()
+    now = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(time.time() - 3))
     for step, e in list(q.items()):
-        if step not in G or not is_open(G[step]):
-            del q[step]; json.dump(q, open(RETRY, 'w')); log(step, 'is closed or has a pull request; ready proof dropped'); continue
-        if e['after'] > now: continue
-        del q[step]; json.dump(q, open(RETRY, 'w'))
+        closed = step not in G or not is_open(G[step])
+        if not closed and e['after'] > now: continue
+        with _RL:
+            q2 = _q_load(); q2.pop(step, None); _q_save(q2)
+        if closed: log(step, 'is closed or has a pull request; ready proof dropped'); continue
         log(step, 'head start over; bringing the ready proof back')
         send(step, e['out'])
 
