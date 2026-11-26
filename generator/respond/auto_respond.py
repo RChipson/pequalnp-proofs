@@ -80,6 +80,9 @@ import sys
 sys.path.insert(0, %r); sys.path.insert(0, %r)
 import genprom, unread, xorsynth
 n, mask, bar = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
+if bar >= 8:
+    c = xorsynth.find(n, mask, bar, 40)
+    if c: print(repr(c)); sys.exit(0)
 for k in range(1, min(bar, 7) + 1):
     c = genprom.circuit(n, mask, k)
     if c: print(repr(c)); sys.exit(0)

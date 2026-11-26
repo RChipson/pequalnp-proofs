@@ -12,9 +12,11 @@ stmt = open(sf).read().strip(); p = genprom.parse(' '.join(stmt.split()))
 if not p: print('not a row of this family'); sys.exit(3)
 n, mask, bar = p
 g = None
-for k in range(1, min(bar, 7) + 1):
-    g = genprom.circuit(n, mask, k)
-    if g: break
+if bar >= 8: g = xorsynth.find(n, mask, bar, 40)          # the quick shapes first: most rows with a high bar fall to them
+if not g:
+    for k in range(1, min(bar, 7) + 1):
+        g = genprom.circuit(n, mask, k)
+        if g: break
 if not g and bar >= 8: g = xorsynth.find(n, mask, bar, 120)
 if g and unread.check(n, mask, g):
     open(out, 'w').write(genprom.lean(step, stmt, n, g)); print(f'{len(g)} gates for the bar {bar}'); sys.exit(0)
