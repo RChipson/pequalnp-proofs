@@ -208,6 +208,8 @@ def send(step, out):
         try:
             if not is_open(gaps().get(step)): log(step, 'was taken meanwhile; proof kept at', out); return False
         except Exception: pass
+        if os.path.exists(f'.pnp/{step}.json') or any(l.split()[:1] == [step] for l in open('generator/pr-requests.txt')):
+            log(step, 'is already held or sent by us'); return False
         nx = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--proof-of', step], capture_output=True, text=True)
         m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', nx.stdout, re.M)
         if not m or m.group(1) != step:
