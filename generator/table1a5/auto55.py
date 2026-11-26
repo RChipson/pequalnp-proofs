@@ -313,6 +313,26 @@ while True:
             log('SENT', step, '|', msg, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
         else:
             log('mask row', step, ':', msg, '; handing back after 20 minutes')
+    elif title.startswith('One-a-side promise: the') and 'has a fan-in-two AND/OR circuit of at most' in title:
+        # a small rectangular graph: exact search (generator/encoder/rowrect.py)
+        dm = f'{S}/desk/rowrect'; os.makedirs(dm, exist_ok=True)
+        sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
+        try:
+            rr = subprocess.run(['python3', 'generator/encoder/rowrect.py', step, sf, om], capture_output=True, text=True, timeout=300)
+            rc, msg = rr.returncode, rr.stdout.strip()[-80:]
+        except subprocess.TimeoutExpired:
+            rc, msg = 3, 'not finished in time'
+        ok = False
+        if rc == 0:
+            c = subprocess.run(f'cd {S}/up/lean && timeout 900 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
+            ok = c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr)
+        if ok:
+            s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
+            log('SENT', step, '|', msg, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
+        elif rc == 1:
+            open(f'/tmp/reason_{step}', 'w').write('statement_seems_false'); log('rectangular row', step, ':', msg)
+        else:
+            log('rectangular row', step, ':', msg)
     elif 'with a one-input NOT gate computes f' in title and title.startswith('Six-input monotone f'):
         # a circuit with a NOT gate tying the AND/OR size: exhaustive SAT search (generator/monot/gen1n.py)
         dm = f'{S}/desk/monot/auto'; os.makedirs(dm, exist_ok=True)
