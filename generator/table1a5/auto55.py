@@ -197,7 +197,7 @@ while True:
                 ok = c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr)
             if ok:
                 s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
-                log('SENT', step, '|', rr.stdout.strip()[-60:], '|', (s.stdout + s.stderr).strip().split('\\n')[-1][:200])
+                log('SENT', step, '|', rr.stdout.strip()[-60:], '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
             else:
                 log('find-a-circuit row', step, ':', rr.stdout.strip()[-110:], '; handing back after 20 minutes')
     elif title.startswith('Monotone function on') and not stmt.startswith('¬'):
