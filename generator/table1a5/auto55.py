@@ -336,7 +336,13 @@ while True:
             rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'statement_seems_false'], capture_output=True, text=True)
             log('promise row', step, ':', msg, '; handed back as statement_seems_false |', rr.stdout.strip()[:80])
         else:
-            log('promise row', step, ':', msg, '; handing back after 20 minutes')
+            # undecided: the hold time goes into the full search (generator/promise/deep.py), two rows at a time at most
+            busy = int(subprocess.run('pgrep -fc "promise/deep.py L-"', shell=True, capture_output=True, text=True).stdout.strip() or 0)
+            if rc == 3 and busy < 2:
+                subprocess.Popen(['python3', 'generator/promise/deep.py', step, '1000'], stdout=open(f'/tmp/deep_{step}.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
+                log('promise row', step, ':', msg, '; full search started for the 20 minutes it is held')
+            else:
+                log('promise row', step, ':', msg, '; handing back after 20 minutes')
     elif title.startswith('Rectangles:') and not stmt.startswith('¬'):
         if str(g.get('pr_open', '0')) not in ('0', 'None'):
             log(step, 'rectangle row with a pull request already waiting; handing back after 20 minutes')
