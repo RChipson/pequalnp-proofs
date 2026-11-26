@@ -140,16 +140,18 @@ for st in held():
 # still held keep their renewal jobs, which hand them back on schedule)
 MINUTES = int(sys.argv[sys.argv.index('--minutes') + 1]) if '--minutes' in sys.argv else 100
 T_END = time.time() + MINUTES * 60
+COPY = int(sys.argv[sys.argv.index('--copy') + 1]) if '--copy' in sys.argv else 0
+WAIT_BURST, WAIT_QUIET = 9, 30
 while True:
     if time.time() > T_END:
         log('bounded run over after', MINUTES, 'minutes; held now:', held()); break
-    # one of the five places stays free, so that a proved twin can always be leased.  Outside a burst (new rows
-    # just reported by the responder) only two places are used, so that two are free when a batch is posted.
+    # join.txt: take the unit from the desk before proving it (it is then ours alone and earns its lease price);
+    # never sit idle; one request every few seconds at most; only a hard unit must be given twenty minutes.
     burst = os.path.exists('/tmp/ask_now') and time.time() - os.path.getmtime('/tmp/ask_now') < 45
-    if len(held()) >= (4 if burst else 2):
+    if len(held()) >= 5:        # the desk lets an agent hold five units
         time.sleep(2); continue
     ASK += 1
-    extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'search', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'open']][ASK % 5]
+    extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'search', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'open']][(ASK + COPY) % 5]
     # the responder (generator/respond/auto_respond.py) touches /tmp/ask_now when the desk's list shows new rows;
     # for a short while after that the request is for solid prove steps, the kind those rows are
     if burst: extra = ['--kind', 'prove', '--level', 'solid']
@@ -159,7 +161,7 @@ while True:
     if not m:
         log('none', extra, ':', r.stdout.strip().split('\n')[0][:100])
         # wait (20 seconds in a burst, 90 otherwise, 150 if the checker is behind), or less when the responder reports new rows
-        t_wait = time.time() + (150 if 'checker is behind' in r.stdout else 20 if burst else 90)
+        t_wait = time.time() + (150 if 'checker is behind' in r.stdout else WAIT_BURST if burst else WAIT_QUIET)
         while time.time() < t_wait:
             if os.path.exists('/tmp/ask_now') and os.path.getmtime('/tmp/ask_now') > asked_at and time.time() - asked_at > 3: break
             time.sleep(1)
@@ -356,7 +358,8 @@ while True:
         else:
             # undecided: the hold time goes into the full search (generator/promise/deep.py), two rows at a time at most
             busy = int(subprocess.run('pgrep -fc "promise/deep.py L-"', shell=True, capture_output=True, text=True).stdout.strip() or 0)
-            if rc == 3 and busy < 2:
+            level_now = (d['lease'].get('terms') or {}).get('level', '')
+            if rc == 3 and busy < 1 and level_now in ('hard', 'open'):
                 subprocess.Popen(['python3', 'generator/promise/deep.py', step, '1000'], stdout=open(f'/tmp/deep_{step}.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
                 log('promise row', step, ':', msg, '; full search started for the 20 minutes it is held')
             else:
@@ -397,4 +400,14 @@ while True:
             # an unfamiliar step: it is held for twenty minutes and written to a file for a look; the loop goes on
             log('LOOK: an unfamiliar step, held 20 minutes:', step, '|', title[:120])
             open('/tmp/auto55_look.log', 'a').write(time.strftime('%H:%M:%S', time.gmtime()) + '\n' + r.stdout[:7000] + '\n=====\n')
-    time.sleep(20)
+    # A unit that was not sent and is not hard goes back at once, with the honest reason, so that the place is
+    # free for the next unit; a hard or open unit keeps its twenty minutes (the renewal job hands it back).
+    level = (d['lease'].get('terms') or {}).get('level', '')
+    sent = any(l.split()[:1] == [step] for l in open('generator/pr-requests.txt'))
+    working = subprocess.run(['pgrep', '-f', f'deep.py {step} '], capture_output=True).returncode == 0 or os.path.exists(f'/tmp/keep_{step}')
+    if os.path.exists(f'.pnp/{step}.json') and not sent and not working and level not in ('hard', 'open'):
+        why = open(f'/tmp/reason_{step}').read().strip() if os.path.exists(f'/tmp/reason_{step}') else 'other'
+        if why not in ('statement_seems_false', 'missing_lemma', 'hypothesis_too_weak', 'does_not_elaborate'): why = 'other'
+        rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, why], capture_output=True, text=True)
+        log('handed back at once', step, 'as', why, '|', rr.stdout.strip()[:60])
+    time.sleep(3)

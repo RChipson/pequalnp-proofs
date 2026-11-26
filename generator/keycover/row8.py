@@ -12,7 +12,7 @@ if not m or m.group(1) != m.group(3) or int(m.group(1)) > 16: print('not a row o
 n, mask, bar = int(m.group(1)), int(m.group(2)), int(m.group(4))
 best = None
 for seed in (1, 2):
-    c = mixed.best(n, mask, 8, 8.0, seed)
+    c = mixed.best(n, mask, 6, 5.0, seed)
     if c and (best is None or len(c[0]) < len(best[0])): best = c
     if best and len(best[0]) <= bar: break
 if not best or len(best[0]) > bar: print(f'our circuit has {len(best[0]) if best else "no"} gates, the bar is {bar}'); sys.exit(3)
