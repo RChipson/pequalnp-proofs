@@ -118,7 +118,9 @@ print('None')
     return out if compiles(out) else None
 
 def h_floor(step, g, stmt):
-    if not ' '.join(stmt.split()).startswith('¬ ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C ∧ C.size ≤'): return None
+    flat = ' '.join(stmt.split())
+    if flat.startswith('¬ ('): flat = '¬ ' + flat[3:]
+    if not flat.startswith('¬ ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C ∧ C.size ≤'): return None
     sf = f'{D}/stmt_{step}.txt'; open(sf, 'w').write(stmt); out = f'{D}/{step.replace("-", "_")}.lean'
     try:
         r = subprocess.run(['python3', os.path.join(GEN, 'promise', 'gennone.py'), step, sf, out], capture_output=True, text=True, timeout=200)

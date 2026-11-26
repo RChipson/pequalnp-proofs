@@ -20,7 +20,9 @@ def main():
     step, sf, out = sys.argv[1:4]
     secs = sys.argv[4] if len(sys.argv) > 4 else '600'
     stmt = open(sf).read().strip()
-    m = PAT.fullmatch(' '.join(stmt.split()))            # the statement is kept as posted; only the match ignores spacing
+    flat = ' '.join(stmt.split())
+    if flat.startswith('¬ (') and flat.endswith(')'): flat = '¬ ' + flat[3:-1]        # the same statement written with brackets
+    m = PAT.fullmatch(flat)            # the statement is kept as posted; only the match ignores spacing
     if not m or m.group(2) != m.group(4): print('not a row of this family'); return 2
     s, n, M = int(m.group(1)), int(m.group(2)), int(m.group(3))
     work = f'{S}/lrat/work'; os.makedirs(work, exist_ok=True)
