@@ -144,7 +144,7 @@ def main():
                     log(step, name, ': proof compiles after', round(time.time() - t), 's |', g.get('title', '')[:90])
                     if not dry: send(step, out)
                     break
-        time.sleep(20)
+        time.sleep(12)
     log('time is up')
 if __name__ == "__main__":
     main()
