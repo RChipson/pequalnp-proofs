@@ -280,6 +280,30 @@ while True:
                 log('handed back', step, 'as statement_seems_false |', rr.stdout.strip()[:80])
             else:
                 log('six-input refutation row', step, ': twin not proved (', why[:120], '); handing back after 20 minutes')
+    elif 'is represented on the one-a-side promise by an AND/OR/NOT circuit' in title and not stmt.startswith('¬'):
+        # a "find" row of the promise family: an exhaustive SAT search (generator/promise/genprom.py) decides
+        # whether a circuit within the bar exists.  If it does, the circuit is the proof; if the search ends
+        # without one, the row is handed back at once as statement_seems_false; if it does not end in ten
+        # minutes, the row is handed back after twenty minutes as usual.
+        dm = f'{S}/desk/promise/pos'; os.makedirs(dm, exist_ok=True)
+        sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
+        try:
+            rr = subprocess.run(['python3', 'generator/promise/genprom.py', 'lean', step, sf, om], capture_output=True, text=True, timeout=600)
+            rc, msg = rr.returncode, rr.stdout.strip()[-90:]
+        except subprocess.TimeoutExpired:
+            rc, msg = 3, 'the search did not end in ten minutes'
+        if rc == 0 and str(g.get('pr_open', '0')) in ('0', 'None'):
+            c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
+            if c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr):
+                s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                log('SENT', step, '|', msg, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
+            else:
+                log('promise row', step, ': the proof does not compile; handing back after 20 minutes')
+        elif rc == 1:
+            rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'statement_seems_false'], capture_output=True, text=True)
+            log('promise row', step, ':', msg, '; handed back as statement_seems_false |', rr.stdout.strip()[:80])
+        else:
+            log('promise row', step, ':', msg, '; handing back after 20 minutes')
     elif title.startswith('Rectangles:') and not stmt.startswith('¬'):
         if str(g.get('pr_open', '0')) not in ('0', 'None'):
             log(step, 'rectangle row with a pull request already waiting; handing back after 20 minutes')
