@@ -69,7 +69,11 @@ def main():
             if have > k:
                 if me.get('short') != have: log(step, 'asks for', k, 'gates; we hold', have); me['short'] = have; json.dump(memo, open(MEMO, 'w'))
                 continue
-            gates, out = gencover.best_circuit(n, gencover.load_blocks(f'{d}/best.txt'), 12)
+            bj = json.load(open(f'{d}/best.json'))
+            if 'circuit' in bj:
+                cj = json.load(open(f'{d}/' + bj['circuit'])); gates, out = [tuple(x) for x in cj['gates']], cj['out']
+            elif 'seed' in bj: gates, out = gencover.build(n, gencover.load_blocks(f'{d}/best.txt'), bj['seed'])
+            else: gates, out = gencover.best_circuit(n, gencover.load_blocks(f'{d}/best.txt'), 12)
             if len(gates) > k: continue
             tree = any('PromiseColTree' in i for i in g.get('imports', []))
             if not tree and not any(i.endswith('PromiseCol') for i in g.get('imports', [])): log(step, 'names neither helper; skipped'); me['after'] = '9'; continue

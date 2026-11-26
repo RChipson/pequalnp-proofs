@@ -13,14 +13,20 @@ The cover file has lines  B <S hi> <S lo> <T hi> <T lo>  (hex, 128 bits as two w
 import sys, re, random, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cse import paar
+import pairsa
 
-def build(n, blocks, seed):
+def build(n, blocks, seed, pair_seconds=0):
     rnd = random.Random(seed) if seed else None
     bits = lambda x: frozenset(i for i in range(n) if x >> i & 1)
     gates = []                       # (op, a, b) on wire numbers; wires 0..n-1 rows, n..2n-1 columns
     def side(sets, off):
-        g, defs, cur = paar(sets, rnd)
         wire = {i: off + i for i in range(n)}
+        if pair_seconds:
+            sets, defs0 = pairsa.pre_pairs(sets, pair_seconds, rnd or random.Random(1))
+            sets = [frozenset(x) for x in sets]
+            for z, a, b in defs0:
+                gates.append(('or', wire[a], wire[b])); wire[z] = 2 * n + len(gates) - 1
+        g, defs, cur = paar(sets, rnd)
         for z, a, b in defs:
             gates.append(('or', wire[a], wire[b])); wire[z] = 2 * n + len(gates) - 1
         out = []; memo = {}
