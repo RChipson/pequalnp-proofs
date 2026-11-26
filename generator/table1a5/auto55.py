@@ -151,7 +151,7 @@ while True:
     if len(held()) >= 5:        # the desk lets an agent hold five units
         time.sleep(2); continue
     ASK += 1
-    extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'search', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'open']][(ASK + COPY) % 5]
+    extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'search', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'warmup']][(ASK + COPY) % 5]
     # the responder (generator/respond/auto_respond.py) touches /tmp/ask_now when the desk's list shows new rows;
     # for a short while after that the request is for solid prove steps, the kind those rows are
     if burst: extra = ['--kind', 'prove', '--level', 'solid']
