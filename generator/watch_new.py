@@ -1,28 +1,32 @@
-"""Print steps posted since a given id that have no proof pull request yet (live view).
-Usage: python3 watch_new.py <lowest id number to show> [min weight]"""
-import json, re, subprocess, sys
-sys.path.insert(0, 'generator')
-import pr_index
-lo = int(sys.argv[1]); minw = int(sys.argv[2]) if len(sys.argv) > 2 else 20
-raw = subprocess.run(['curl', '-sSf', '-m', '40', 'https://data.pequalnp.com/data/desk/gaps.json'], capture_output=True, text=True).stdout
-gaps = json.loads(raw)
-json.dump(gaps, open('/tmp/gaps_now.json', 'w'))
-idx, newest = pr_index.build(6900)
-old = json.load(open('/tmp/pr_index.json'))
-for k, v in idx.items(): old[k] = sorted(set(old.get(k, [])) | set(v))
-json.dump(old, open('/tmp/pr_index.json', 'w'))
-def short(s):
-    s = re.sub(r'PEqualNP\.(CircuitLowerBounds|MetaComplexity)\.', '', s)
-    s = re.sub(r'\((\d+) : (ℕ|Fin \(\d+ : ℕ\))\)', r'\1', s)
-    s = re.sub(r'\s+', ' ', s)
-    s = re.sub(r'\(?x\d* ?0 && x\d* ?1\)? \|\| \(?x\d* ?1 && x\d* ?2\)? \|\| \(?x\d* ?2 && x\d* ?3\)? \|\| \(?x\d* ?3 && x\d* ?4\)?.*?x\d* ?8 && x\d* ?5\)?', 'F9', s)
-    return s
-print('list updated', gaps['updated_at'], '| newest PR', newest)
-for r in sorted(gaps['gaps'], key=lambda r: int(r['id'].split('-')[-1])):
-    n = int(r['id'].split('-')[-1])
-    if n < lo or r['weight'] < minw: continue
-    mod = r['file'].split('/')[-1][:-5]
-    proofs = old.get(mod, [])
-    reds = sorted(x for k, v in old.items() if k.startswith('R_' + mod[2:] + '_') for x in v)
-    flag = 'FREE' if not proofs else 'taken'
-    print(f"{r['id']} w={r['weight']} {flag} proofs={proofs[:3]} reds={len(reds)} len={len(r['statement'])} | {short(r['statement'])[:260]}")
+#!/usr/bin/env python3
+"""Watch the public desk file and stop as soon as a batch of new titled steps appears (so that a new
+family is noticed within a minute, not at the next half-hourly check).
+
+  python3 generator/watch_new.py [minutes] [how many new titled steps count as a batch]"""
+import json, re, subprocess, sys, time
+minutes = int(sys.argv[1]) if len(sys.argv) > 1 else 100; need = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+def gaps():
+    raw = subprocess.run(['curl', '-s', '-m', '60', 'https://data.pequalnp.com/data/desk/gaps.json'], capture_output=True, text=True).stdout
+    try: return json.loads(raw)['gaps']
+    except Exception: return None
+g0 = None
+while g0 is None: g0 = gaps(); time.sleep(2)
+seen = {g['id'] for g in g0}; t0 = time.time()
+print(time.strftime('%H:%M:%S', time.gmtime()), 'watching;', len(seen), 'steps open', flush=True)
+while time.time() - t0 < minutes * 60:
+    time.sleep(60)
+    g = gaps()
+    if g is None: continue
+    new = [x for x in g if x['id'] not in seen and x.get('title') and not x['title'].startswith('A step toward')]
+    for x in g: 
+        if not x.get('title') or x['title'].startswith('A step toward'): seen.add(x['id'])
+    if len(new) >= need:
+        print(time.strftime('%H:%M:%S', time.gmtime()), 'NEW BATCH:', len(new), 'titled steps', flush=True)
+        fam = {}
+        for x in new: fam.setdefault(re.sub(r'\d+', '#', x['title'])[:110], []).append(x)
+        for f, xs in sorted(fam.items(), key=lambda kv: -len(kv[1])):
+            print(len(xs), 'no PR', sum(1 for x in xs if str(x.get('pr_open', '0')) in ('0', 'None')), '|', f, '|', xs[0]['id'], flush=True)
+            print('   statement:', xs[0].get('statement', '')[:400].replace('\n', ' '))
+            print('   sketch:', (xs[0].get('sketch') or '')[:500].replace('\n', ' '))
+        sys.exit(0)
+print('no new batch in', minutes, 'minutes')
