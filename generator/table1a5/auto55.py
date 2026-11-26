@@ -291,6 +291,27 @@ while True:
                 log('handed back', step, 'as statement_seems_false |', rr.stdout.strip()[:80])
             else:
                 log('six-input refutation row', step, ': twin not proved (', why[:120], '); handing back after 20 minutes')
+    elif 'with a one-input NOT gate computes f' in title and title.startswith('Six-input monotone f'):
+        # a circuit with a NOT gate tying the AND/OR size: exhaustive SAT search (generator/monot/gen1n.py)
+        dm = f'{S}/desk/monot/auto'; os.makedirs(dm, exist_ok=True)
+        sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
+        try:
+            rr = subprocess.run(['python3', 'generator/monot/gen1n.py', step, sf, om, '840'], capture_output=True, text=True, timeout=900)
+            rc, msg = rr.returncode, rr.stdout.strip()[-90:]
+        except subprocess.TimeoutExpired:
+            rc, msg = 3, 'the search did not end in time'
+        if rc == 0:
+            c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
+            if c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr):
+                s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                log('SENT', step, '|', msg, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
+            else:
+                log('one-NOT row', step, ': the proof does not compile; handing back after 20 minutes')
+        elif rc == 1:
+            rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'statement_seems_false'], capture_output=True, text=True)
+            log('one-NOT row', step, ':', msg, '; handed back as statement_seems_false |', rr.stdout.strip()[:80])
+        else:
+            log('one-NOT row', step, ':', msg, '; handing back after 20 minutes')
     elif 'is represented on the one-a-side promise by an AND/OR/NOT circuit' in title and not stmt.startswith('¬'):
         # a "find" row of the promise family (generator/promise/quick_find.py): if a circuit within the bar is
         # found it is the proof; if the exhaustive search (bars up to 7 gates) ends without one, the row is

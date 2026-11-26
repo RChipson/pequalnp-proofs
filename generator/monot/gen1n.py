@@ -55,7 +55,10 @@ def main():
                 if o.startswith('GATES['): gates = eval(o[5:])
         time.sleep(0.5)
     for pr in procs.values(): pr.kill()
-    if not gates: print(f'no circuit with at most {k} gates and a NOT found in {int(time.time() - t0)} s'); return 1
+    if not gates:
+        # both searches ended (exactly k and exactly k - 1 gates, which cover every smaller size by a doubled NOT): none exists
+        if not procs: print(f'no circuit with at most {k} gates and a NOT exists (exhaustive search, {int(time.time() - t0)} s)'); return 1
+        print(f'undecided: the search did not end in {secs} s'); return 3
     for x in range(1 << n): assert synth_not.evalc(n, gates, x) == bool(T >> x & 1)
     assert len(gates) <= k and any(t == 'not' for t, a, b in gates)
     open(outp, 'w').write(lean(step, stmt, n, gates)); print(f'wrote {outp}: {len(gates)} gates in {int(time.time() - t0)} s'); return 0
