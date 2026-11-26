@@ -183,6 +183,23 @@ while True:
                 send_twin(tw, lambda tid, tstmt: lower_file(tid, int(up.group(1)), tstmt)[0])
         else:
             log('LOOK:', step, 'at-most-10 row whose opposite did not compile'); open('/tmp/auto55_other.log', 'a').write(r.stdout + '\n=====\n'); hold(step, 'out_of_time')
+    elif 'has an AND/OR/NOT circuit of fan-in at most two with at most' in title and stmt.startswith('PEqualNP.MetaComplexity.HasCircuitSize 1') and ' 15 (fun' not in stmt[:60]:
+        # "find a circuit" rows on about ten inputs: an exact search for thirteen minutes
+        if str(g.get('pr_open', '0')) not in ('0', 'None'):
+            log(step, 'find-a-circuit row with a pull request already waiting; handing back after 20 minutes')
+        else:
+            dm = f'{S}/desk/findckt/auto'; os.makedirs(dm, exist_ok=True)
+            sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
+            rr = subprocess.run(['python3', 'generator/findckt/genfind.py', step, sf, om, '780'], capture_output=True, text=True)
+            ok = rr.returncode == 0
+            if ok:
+                c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
+                ok = c.returncode == 0 and not re.search(r'\\berror\\b', c.stdout + c.stderr)
+            if ok:
+                s = subprocess.run(['bash', 'generator/submit.sh', step, om], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+                log('SENT', step, '|', rr.stdout.strip()[-60:], '|', (s.stdout + s.stderr).strip().split('\\n')[-1][:200])
+            else:
+                log('find-a-circuit row', step, ':', rr.stdout.strip()[-110:], '; handing back after 20 minutes')
     elif title.startswith('Monotone function on') and not stmt.startswith('¬'):
         if str(g.get('pr_open', '0')) not in ('0', 'None'):
             log(step, 'NOT-on-a-gate row with a pull request already waiting; handing back after 20 minutes')
