@@ -150,7 +150,7 @@ while True:
     r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
     m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
     if not m:
-        log('none', extra, ':', r.stdout.strip().split('\n')[0][:100]); time.sleep(150 if 'checker is behind' in r.stdout else 40); continue
+        log('none', extra, ':', r.stdout.strip().split('\n')[0][:100]); time.sleep(150 if 'checker is behind' in r.stdout else 20); continue
     step = m.group(1)
     d = json.load(open(f'.pnp/{step}.json')); g = d['gap']; stmt = g['statement'].strip(); title = g.get('title', '')
     log('GIVEN', step, '|', title[:110], '| pr_open', g.get('pr_open'), '| terms', (d['lease'].get('terms') or {}))

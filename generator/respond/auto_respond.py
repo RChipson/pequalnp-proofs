@@ -31,7 +31,8 @@ def is_open(g): return g is not None and str(g.get('pr_open', '0')) in ('0', 'No
 def num(i):
     m = re.match(r'L-[a-z]+-(\d+)$', i); return int(m.group(1)) if m else -1
 def compiles(path):
-    c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 900 lake env lean {path}', shell=True, capture_output=True, text=True, env=ENV)
+    lock = 'flock /tmp/lean.lock ' if os.path.getsize(path) > 60000 else ''      # small proofs may compile side by side
+    c = subprocess.run(f'cd {S}/up/lean && {lock}timeout 900 lake env lean {path}', shell=True, capture_output=True, text=True, env=ENV)
     return c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr)
 
 def witness_lean(step, stmt, gates, outw):
@@ -198,29 +199,42 @@ def send(step, out):
         log('SENT', step, (s.stdout + s.stderr).strip().split('\n')[-1][:200])
         return True
 
+def answer(step, g, dry):
+    stmt = g.get('statement', '').strip()
+    for name, h in HANDLERS:
+        t = time.time()
+        try: out = h(step, g, stmt)
+        except Exception as e: log(step, name, 'handler error', repr(e)[:120]); out = None
+        if out:
+            log(step, name, ': proof compiles after', round(time.time() - t), 's |', g.get('title', '')[:90])
+            if not dry: send(step, out)
+            return
+
 def main():
+    from concurrent.futures import ThreadPoolExecutor
     end = time.time() + 60 * float(sys.argv[1]); dry = len(sys.argv) > 2 and sys.argv[2] == 'dry'
     G = gaps()
-    seen = set(G)
+    seen = set(G); first = {}
     log('watching;', len(G), 'steps open; only rows posted from now on are answered')
+    ex = ThreadPoolExecutor(3); busy = {}
     while time.time() < end:
         try: G = gaps()
         except Exception as e: time.sleep(20); continue
         retry_due(G)
-        new = sorted((i for i in G if i not in seen), key=num)
-        for step in new:
-            seen.add(step); g = G[step]
-            if not is_open(g) or 'Not for takers' in g.get('sketch', '') or 'do not start' in g.get('sketch', ''): continue
-            stmt = g.get('statement', '').strip()
-            for name, h in HANDLERS:
-                t = time.time()
-                try: out = h(step, g, stmt)
-                except Exception as e: log(step, name, 'handler error', repr(e)[:120]); out = None
-                if out:
-                    log(step, name, ': proof compiles after', round(time.time() - t), 's |', g.get('title', '')[:90])
-                    if not dry: send(step, out)
-                    break
-        time.sleep(12)
+        now = time.time()
+        for i in G:
+            if i not in seen and i not in first: first[i] = now
+        busy = {i: f for i, f in busy.items() if not f.done()}
+        # newest rows first; a row that has waited more than 90 seconds is left alone (someone holds it by then)
+        todo = sorted((i for i in first if i not in seen), key=num, reverse=True)
+        for step in todo:
+            g = G.get(step)
+            if g is None or not is_open(g) or now - first[step] > 90 or 'Not for takers' in g.get('sketch', '') or 'do not start' in g.get('sketch', ''):
+                seen.add(step); continue
+            if len(busy) >= 3: break
+            seen.add(step); busy[step] = ex.submit(answer, step, g, dry)
+        time.sleep(8)
     log('time is up')
+
 if __name__ == "__main__":
     main()
