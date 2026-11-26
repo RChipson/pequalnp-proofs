@@ -425,10 +425,13 @@ while True:
     level = (d['lease'].get('terms') or {}).get('level', '')
     sent = any(l.split()[:1] == [step] for l in open('generator/pr-requests.txt'))
     working = subprocess.run(['pgrep', '-f', f'deep.py {step} '], capture_output=True).returncode == 0 or os.path.exists(f'/tmp/keep_{step}')
-    if os.path.exists(f'.pnp/{step}.json') and not sent and not working and not os.path.exists(f'/tmp/reason_false_{step}'):
+    # families that have their own rule above were already searched; the generic provers are for the rest
+    own_rule = any(k in title for k in ('is represented on the one-a-side promise by an AND/OR', 'with a one-input NOT gate computes f',
+                                         'has a fan-in-two AND/OR circuit of at most', 'Rectangles:'))
+    if os.path.exists(f'.pnp/{step}.json') and not sent and not working and not own_rule:
         # before a unit goes back: the generic provers (generator/respond/try_unit.py)
         try:
-            tu = subprocess.run(['python3', 'generator/respond/try_unit.py', step], capture_output=True, text=True, timeout=420)
+            tu = subprocess.run(['python3', 'generator/respond/try_unit.py', step], capture_output=True, text=True, timeout=150)
             if tu.returncode == 0:
                 proof = tu.stdout.strip().split('\n')[-1]
                 s = subprocess.run(['bash', 'generator/submit.sh', step, proof], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
