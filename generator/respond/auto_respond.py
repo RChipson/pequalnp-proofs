@@ -60,15 +60,32 @@ theorem PEqualNP.Outside.{tag} : {stmt} := by
 '''
 
 GATES = re.compile(r'((?:OR|AND|NOT) \d+(?: \d+)?(?:, (?:OR|AND|NOT) \d+(?: \d+)?)+)[;.,]? ?(?:the )?output(?: is)?(?: wire)? (\d+)')
+GATES2 = re.compile(r'((?:OR|AND|NOT)\(\d+(?:, ?\d+)?\)(?:, (?:OR|AND|NOT)\(\d+(?:, ?\d+)?\))+)')
+def gift_gates(text):
+    """a gate list spelled out in a unit's notes, in either of the two spellings seen: (gates, output wire or None)"""
+    m = GATES.search(text)
+    if m:
+        gates = []
+        for t in m.group(1).split(', '):
+            p = t.split(); gates.append((p[0].lower(), [int(x) for x in p[1:]]))
+        return gates, int(m.group(2))
+    m = GATES2.search(text)
+    if m:
+        gates = [(op.lower(), [int(x) for x in re.findall(r'\d+', ins)]) for op, ins in re.findall(r'(OR|AND|NOT)\(([^)]*)\)', m.group(1))]
+        mo = re.search(r'output(?: is)?(?: wire)? (\d+)', text[m.end():m.end() + 80])
+        return gates, (int(mo.group(1)) if mo else None)
+    return None
 def h_gift(step, g, stmt):
     if not (stmt.startswith('∃ C : PEqualNP.CircuitLowerBounds.Circuit,') or stmt.startswith('PEqualNP.Represents.RepSizeAtMost')): return None
-    m = GATES.search(g.get('sketch', '') + ' ' + g.get('context', ''))
-    if not m: return None
-    gates = []
-    for t in m.group(1).split(', '):
-        p = t.split(); gates.append((p[0].lower(), [int(x) for x in p[1:]]))
+    gg = gift_gates(g.get('sketch', '') + ' ' + g.get('context', ''))
+    if not gg: return None
+    gates, outw = gg
+    if outw is None:                                   # the last gate is the output; the number of inputs is not needed
+        mi = re.search(r'gate k is wire (\d+) \+ k|gate j writes wire (\d+) ?\+ ?j', g.get('sketch', '') + ' ' + g.get('context', ''))
+        if not mi: return None
+        outw = int(mi.group(1) or mi.group(2)) + len(gates) - 1
     out = f'{D}/{step.replace("-", "_")}.lean'
-    open(out, 'w').write(witness_lean(step, stmt, gates, int(m.group(2))))
+    open(out, 'w').write(witness_lean(step, stmt, gates, outw))
     return out if compiles(out) else None
 
 def h_find(step, g, stmt):
