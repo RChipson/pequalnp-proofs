@@ -146,7 +146,7 @@ while True:
     if len(held()) >= 4:        # one of the five places stays free, so that a proved twin can always be leased
         time.sleep(30); continue
     ASK += 1
-    extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'search', '--level', 'solid'], ['--kind', 'prove', '--level', 'open'], ['--kind', 'search'], []][ASK % 5]
+    extra = [['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'search', '--level', 'solid'], ['--kind', 'prove', '--level', 'solid'], ['--kind', 'prove', '--level', 'open']][ASK % 5]
     r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
     m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
     if not m:
