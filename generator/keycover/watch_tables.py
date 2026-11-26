@@ -54,7 +54,7 @@ def main():
         except Exception as e: log('list not read', e); time.sleep(30); continue
         now = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime())
         for step, g in G.items():
-            if 'given by its table' not in g.get('title', ''): continue
+            if 'given by its table' not in g.get('title', '') and 'candidate family' not in g.get('title', ''): continue
             if str(g.get('pr_open', '0')) not in ('0', 'None'): continue
             if 'STOOD DOWN' in g.get('sketch', '') or 'do not start' in g.get('sketch', ''): continue
             me = memo.setdefault(step, {})
