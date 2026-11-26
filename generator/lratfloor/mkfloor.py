@@ -27,7 +27,10 @@ def main():
     packer = f'{S}/lrat/genrow.py'
     if not os.path.exists(packer):
         src = subprocess.run(['git', '-C', '/home/user/pequalnp-proofs', 'show', 'upstream/main:notes/data/lrat-link/genrow.py'], capture_output=True, text=True, check=True).stdout
-        open(packer, 'w').write(src)
+        # join.txt: a numeral longer than 20 digits is refused, so the words are kept below 2^61 (the unpacker
+        # reads any number of fields per word, up to a leading 1)
+        assert 'K = 1024 // W' in src
+        open(packer, 'w').write(src.replace('K = 1024 // W', 'K = max(1, 60 // W)'))
     tag = step.replace('-', '_')
     cnf, lrat, raw = f'{work}/{tag}.cnf', f'{work}/{tag}.lrat', f'{work}/{tag}.raw.lean'
     subprocess.run([sys.executable, f'{HERE}/gennot_promise.py', str(n), str(n), str(M), str(s), cnf], capture_output=True, check=True)
