@@ -190,7 +190,13 @@ while True:
         else:
             dm = f'{S}/desk/findckt/auto'; os.makedirs(dm, exist_ok=True)
             sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
-            rr = subprocess.run(['python3', 'generator/findckt/genfind.py', step, sf, om, '780'], capture_output=True, text=True)
+            # a step whose search already came back empty is not searched again
+            tried = set(open(f'{dm}/tried.txt').read().split()) if os.path.exists(f'{dm}/tried.txt') else set()
+            if step in tried:
+                rr = subprocess.CompletedProcess([], 1, 'searched before without result', '')
+            else:
+                rr = subprocess.run(['python3', 'generator/findckt/genfind.py', step, sf, om, '780'], capture_output=True, text=True)
+                if rr.returncode != 0: open(f'{dm}/tried.txt', 'a').write(step + '\n')
             ok = rr.returncode == 0
             if ok:
                 c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {om}', shell=True, capture_output=True, text=True, env=ENV)
