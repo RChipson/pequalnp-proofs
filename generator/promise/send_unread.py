@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, %r); sys.path.insert(0, %r)
 import unread, xorsynth
 n, mask, k, fast = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), sys.argv[4] == 'fast'
-g = xorsynth.find(n, mask, k, 12)
+g = xorsynth.find(n, mask, k, 300)
 if g and unread.check(n, mask, g): print('CIRCUIT', repr(g)); sys.exit(0)
 if fast: print('none of the quick shapes'); sys.exit(0)
 rc, cc = unread.classes(n, mask)
