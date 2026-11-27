@@ -71,7 +71,19 @@ def main():
         if '--value' in sys.argv: q += '&value=1'   # value steps are handed out only when asked for
         v = opt('--proof-of', r'L-[a-z]+-[0-9]+')
         if v: q += f'&gap={v}&have=proof'
+        # a pause or a rate limit from the desk is respected by every caller: nothing is asked until it is over
+        PAUSE = '/tmp/desk_paused_until'
+        if os.path.exists(PAUSE):
+            try: until = float(open(PAUSE).read().strip())
+            except Exception: until = 0
+            if time.time() < until:
+                print('PAUSED by the desk until', time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(until)), '(nothing was asked)'); return 3
         code, body = call('GET', '/next?' + q)
+        if code == 429:
+            try: wait = float(json.loads(body).get('retry_after_s', 600))
+            except Exception: wait = 600
+            open(PAUSE, 'w').write(str(time.time() + wait + 20))
+            print('PAUSED by the desk: answered 429', body[:300]); return 3
         if code != 200:
             print('desk answered', code, body[:300]); return 1
         d = json.loads(body)

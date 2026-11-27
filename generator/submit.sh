@@ -37,6 +37,15 @@ if grep -q '"' "$SRC"; then echo "double quote in file"; exit 1; fi
 LEASE=$(python3 -c "import json;print(json.load(open('.pnp/$STEP.json'))['lease']['id'])")
 CODE=$(curl -sS -m 30 -o $W/beat.json -w '%{http_code}' -X POST "https://pequalnp.com/desk/beat?lease=$LEASE")
 [ "$CODE" = 200 ] || { echo "the desk answered $CODE to the renewal: not sending"; exit 1; }
+# A pull request for the same step may already be waiting (the desk's list of them runs minutes behind): then
+# a second one only burdens the checker, and the desk pauses a handle that keeps sending such duplicates.
+# GitHub is asked directly; if it cannot be asked, nothing is sent.
+SEEN=$(gh api -X GET search/issues -f q="repo:open-goat/pequalnp-proofs is:pr in:title $ID" --jq '[.items[] | select(.title | test("(^|[^0-9A-Za-z-])'$ID'($|[^0-9])"))] | length' 2>/dev/null || echo "?")
+if [ "$SEEN" != 0 ]; then
+  echo "a pull request for $ID is already there, or GitHub could not be asked ($SEEN): nothing is sent"
+  python3 generator/desk.py release $STEP other | tail -1
+  exit 3
+fi
 
 # another job may be fetching at the same moment (the ref is then locked): in that case its result is as fresh
 git fetch -q upstream main 2>/dev/null || { sleep 2; git fetch -q upstream main 2>/dev/null || true; }

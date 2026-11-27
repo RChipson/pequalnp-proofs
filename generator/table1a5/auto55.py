@@ -141,7 +141,7 @@ for st in held():
 MINUTES = int(sys.argv[sys.argv.index('--minutes') + 1]) if '--minutes' in sys.argv else 100
 T_END = time.time() + MINUTES * 60
 COPY = int(sys.argv[sys.argv.index('--copy') + 1]) if '--copy' in sys.argv else 0
-WAIT_BURST, WAIT_QUIET = 9, 30
+WAIT_BURST, WAIT_QUIET = 9, 45
 while True:
     if time.time() > T_END:
         log('bounded run over after', MINUTES, 'minutes; held now:', held()); break
@@ -158,6 +158,12 @@ while True:
     asked_at = time.time()
     r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another'] + extra, capture_output=True, text=True)
     m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
+    if not m and 'PAUSED' in r.stdout:
+        # the desk has paused us or asked us to slow down: wait until it is over (generator/desk.py keeps the time)
+        try: until = float(open('/tmp/desk_paused_until').read().strip())
+        except Exception: until = time.time() + 600
+        log('paused by the desk:', r.stdout.strip().split('\n')[0][:160])
+        time.sleep(max(30, min(until - time.time(), T_END - time.time() + 5))); continue
     if not m:
         log('none', extra, ':', r.stdout.strip().split('\n')[0][:100])
         # wait (20 seconds in a burst, 90 otherwise, 150 if the checker is behind), or less when the responder reports new rows

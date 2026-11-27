@@ -220,6 +220,17 @@ def retry_due(G):
         log(step, 'head start over; bringing the ready proof back')
         send(step, e['out'])
 
+def paused():
+    try: return time.time() < float(open('/tmp/desk_paused_until').read().strip())
+    except Exception: return False
+def pr_there(step):
+    """number of pull requests on the project for this step, asked of GitHub directly; -1 if it cannot be asked"""
+    r = subprocess.run(['gh', 'api', '-X', 'GET', 'search/issues', '-f', f'q=repo:open-goat/pequalnp-proofs is:pr in:title {step}', '--jq', '[.items[].title]'], capture_output=True, text=True)
+    if r.returncode != 0: return -1
+    try: titles = json.loads(r.stdout)
+    except Exception: return -1
+    return sum(1 for t in titles if re.search(r'(^|[^0-9A-Za-z-])' + re.escape(step) + r'($|[^0-9])', t))
+
 def send(step, out):
     with open('/tmp/submit.lock', 'w') as lk:
         fcntl.flock(lk, fcntl.LOCK_EX)
@@ -228,18 +239,17 @@ def send(step, out):
         except Exception: pass
         if os.path.exists(f'.pnp/{step}.json') or any(l.split()[:1] == [step] for l in open('generator/pr-requests.txt')):
             log(step, 'is already held or sent by us'); return False
+        if paused(): log(step, 'the desk has paused us; nothing asked'); return False
+        if pr_there(step) != 0: log(step, 'already has a pull request (or GitHub could not be asked); nothing asked'); return False
         nx = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--proof-of', step], capture_output=True, text=True)
         m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', nx.stdout, re.M)
         if not m or m.group(1) != step:
             mm = re.search(r'back after (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)', nx.stdout)
-            if mm: remember(step, out, mm.group(1))
             log(step, 'not handed to us:', nx.stdout.strip()[:150], '| proof kept at', out); return False
         subprocess.Popen(['bash', 'generator/hold.sh', step, 'out_of_time', '20'], stdout=open(f'/tmp/hold_{step}.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
-        for attempt in (1, 2):
-            s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=ENV)
-            if 'pushed ' in s.stdout: log('SENT', step, (s.stdout + s.stderr).strip().split('\n')[-1][:200]); return True
-            time.sleep(3)
-        log('NOT sent', step, ':', (s.stdout + s.stderr).strip().split('\n')[-1][:200], '(the lease stays on its renewal job and is handed back by it)')
+        s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=ENV)
+        if 'pushed ' in s.stdout: log('SENT', step, (s.stdout + s.stderr).strip().split('\n')[-1][:200]); return True
+        log('NOT sent', step, ':', (s.stdout + s.stderr).strip().split('\n')[-1][:200])
         return False
 
 def answer(step, g, dry):
@@ -263,7 +273,7 @@ def main():
     while time.time() < end:
         try: G = gaps()
         except Exception as e: time.sleep(20); continue
-        retry_due(G)
+        if paused(): time.sleep(30); continue
         now = time.time()
         fresh = False
         for i in G:
