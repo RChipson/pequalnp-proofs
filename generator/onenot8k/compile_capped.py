@@ -30,7 +30,7 @@ def run(path, cap=6.4, seconds=1500):
     env = dict(os.environ, PATH=os.path.expanduser('~/.elan/bin') + ':' + os.environ['PATH'])
     log = path + '.compile.log'
     with open(log, 'w') as lf:
-        p = subprocess.Popen(['lake', 'env', 'lean', path], cwd=LEAN_DIR, stdout=lf, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+        p = subprocess.Popen(['lake', 'env', 'lean'] + os.environ.get('LEAN_ARGS', '').split() + [path], cwd=LEAN_DIR, stdout=lf, stderr=subprocess.STDOUT, env=env, start_new_session=True)
         t0 = time.time(); peak = 0.0; over = False
         while p.poll() is None:
             peak = max(peak, tree_rss(p.pid))

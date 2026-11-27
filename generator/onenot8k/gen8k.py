@@ -72,6 +72,51 @@ def mono(E, vs, lo, hi, secs, shaped=False):
             return k, gates, outw
     return None, None, None
 
+SO = 'set_option maxRecDepth 100000 in\nset_option maxHeartbeats 0 in\n'
+HELP = """lemma okT_nil {E Q : List (ℕ × ℕ)} {Z L : ℕ} : okT E Q Z L [] = true := by
+  unfold okT
+  simp only [List.all_nil]
+lemma okT_cons {E Q : List (ℕ × ℕ)} {Z L t : ℕ} {ts : List ℕ} (h : chk E Q Z (L - 1) t FF 1 = false)
+    (hs : okT E Q Z L ts = true) : okT E Q Z L (t :: ts) = true := by
+  unfold okT at hs ⊢
+  simp only [List.all_cons, h, hs, Bool.not_false, Bool.and_self]
+lemma okE_of {E Q : List (ℕ × ℕ)} {Z L : ℕ} {ts : List ℕ} (hr : List.range L = ts)
+    (hp : (pOk Z Q && Nat.ble L 15) = true) (hT : okT E Q Z L ts = true) : okE E Q (Z, L) = true := by
+  subst hr
+  unfold okE
+  simp only [hT, Bool.or_true, Bool.and_true]
+  exact hp
+"""
+
+def split_tables(t, per_t_from=13):
+    """The checks of the tables "minus two vertices" and "minus one vertex" as one theorem per entry, and an entry
+    with a bound of per_t_from gates or more as one theorem per value of t.  The statements r2 and r1 stay as they
+    were; only the size of each piece the kernel evaluates changes (a piece's memory is given back when it ends:
+    as one piece, the table of a 15-gate graph needed more memory than the machine these files are compiled on)."""
+    anchor = 'set_option maxRecDepth 100000 in\nset_option maxHeartbeats 0 in\ntheorem r3 : '
+    assert anchor in t
+    t = t.replace(anchor, HELP + anchor, 1)
+    for name, tab, Q in (('r2', 'rt2', 'pr rt3'), ('r1', 'rt1', 'pr (rt2 ++ rt3)')):
+        ent = [(int(a), int(b)) for a, b in re.findall(r'\((\d+), (\d+)\)', re.search(r'^def %s : List \(ℕ × ℕ\) := \[(.*)\]$' % tab, t, re.M).group(1))]
+        old = SO + f'theorem {name} : {tab}.all (fun e => okE [] ({Q} e.1) e) = true := by decide +kernel\n'
+        assert old in t, name
+        new = ''
+        for i, (a, b) in enumerate(ent):
+            if b >= per_t_from:
+                new += SO + f'theorem {name}_{i}_pre : (pOk {a} ({Q} {a}) && Nat.ble {b} 15) = true := by decide +kernel\n'
+                for q in range(b):
+                    new += SO + f'theorem {name}_{i}_{q} : chk [] ({Q} {a}) {a} ({b} - 1) {q} FF 1 = false := by decide +kernel\n'
+                chain = 'okT_nil'
+                for q in reversed(range(b)): chain = f'(okT_cons {name}_{i}_{q} {chain})'
+                new += f'theorem {name}_{i} : okE [] ({Q} {a}) ({a}, {b}) = true :=\n  okE_of (ts := {list(range(b))}) (by decide) {name}_{i}_pre {chain}\n'
+            else:
+                new += SO + f'theorem {name}_{i} : okE [] ({Q} {a}) ({a}, {b}) = true := by decide +kernel\n'
+        new += f'theorem {name} : {tab}.all (fun e => okE [] ({Q} e.1) e) = true := by\n'
+        new += f'  simp only [{tab}, List.all_cons, List.all_nil, Bool.and_true, Bool.and_eq_true]\n'
+        new += '  exact ⟨' + ', '.join(f'{name}_{i}' for i in range(len(ent))) + '⟩\n'
+        t = t.replace(old, new, 1)
+    return t
+
 def big(v):
     words = []
     while True:
@@ -202,7 +247,13 @@ def build(step, stmt, secs=20.0, seed=1, log=print):
     i0 = t.index(f'theorem PEqualNP.Outside.{TEMPLATE_ID} :\n') + len(f'theorem PEqualNP.Outside.{TEMPLATE_ID} :\n'); i1 = t.index(f' :=\n  PEqualNP.Outside.{TEMPLATE_ID}.onFinal', i0)
     t = t[:i0] + stmt + t[i1:]
     t = t.replace(TEMPLATE_ID, step.replace('-', '_'))
-    t = t.replace('import PEqualNP.Defs\n', 'import PEqualNP.Defs\n\n-- The whole proof text is that of the merged ' + TEMPLATE_ID + ' (same repository, Apache-2.0), whose header follows;\n-- only the data of this graph (rows, tables of sub-bounds, bounds, witness) was computed anew.\n', 1)
+    note = ''
+    # off unless asked for: the pieces are smaller, but the largest single piece of a 15-gate graph still needs about
+    # 13 GB, so the split alone does not make such a file compile on a 15 GB machine
+    if os.environ.get('GEN8K_SPLIT') and (m >= 15 or max(size[(v,)] for v in V) >= 13):
+        t = split_tables(t)
+        note = '-- The two table checks r2 and r1 are evaluated entry by entry (three small lemmas put them together), to keep the memory of each step small.\n'
+    t = t.replace('import PEqualNP.Defs\n', 'import PEqualNP.Defs\n\n-- The whole proof text is that of the merged ' + TEMPLATE_ID + ' (same repository, Apache-2.0), whose header follows;\n-- only the data of this graph (rows, tables of sub-bounds, bounds, witness) was computed anew.\n' + note, 1)
     return t, dict(m=m, L=L, NN=NN, sizes={''.join(map(str, Z)): s for Z, s in size.items()})
 
 if __name__ == '__main__':

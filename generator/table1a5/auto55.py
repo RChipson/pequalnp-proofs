@@ -101,6 +101,13 @@ def six_file(step, stmt, script='generator/sixinput/gen6.py', sub='six'):
     # were killed for lack of memory (27 Nov); the searches of several copies still run side by side
     lock = 'flock /tmp/lean.lock '
     if sub == 'onenot8k':
+        # A graph whose least circuit has 15 gates: the kernel needs about 14 GB or more for one step of its file
+        # (measured 27 Nov; the project's checker has swap space for that, this machine has none), so the file
+        # cannot be compiled here and is not sent.
+        try: gates = json.load(open(out + '.json'))['m']
+        except Exception: gates = 0
+        if gates >= 15 and 'SwapTotal:             0 kB' in open('/proc/meminfo').read().replace('\t', ' '):
+            return None, f'a {gates}-gate graph: its file needs more memory to compile than this machine has'
         # with a watch on memory: this machine has 15 GB, and a compile past 12 GB is stopped cleanly (files the
         # checker accepted peaked at 5 to 11 GB here; the 15-gate graphs go past 12 GB and are not sent)
         c = subprocess.run(f'{lock}python3 generator/onenot8k/compile_capped.py {out} 12.0', shell=True,
