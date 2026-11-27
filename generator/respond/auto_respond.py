@@ -35,6 +35,13 @@ def compiles(path):
     c = subprocess.run(f'cd {S}/up/lean && {lock}timeout 900 lake env lean {path}', shell=True, capture_output=True, text=True, env=ENV)
     return c.returncode == 0 and not re.search(r'\berror\b', c.stdout + c.stderr)
 
+def good(path):
+    """the path if the file compiles; otherwise the file is removed, so that nothing can mistake it for a proof"""
+    if compiles(path): return path
+    try: os.remove(path)
+    except OSError: pass
+    return None
+
 def witness_lean(step, stmt, gates, outw):
     """gates: list of (op, [wires]); a witness proof for '∃ C, FanInTwo/Monotone2 C ∧ C.size ≤ k ∧ ...' or RepSizeAtMost"""
     tag = step.replace('-', '_'); ns = f'PEqualNP.Outside.{tag}_aux'
@@ -86,7 +93,7 @@ def h_gift(step, g, stmt):
         outw = int(mi.group(1) or mi.group(2)) + len(gates) - 1
     out = f'{D}/{step.replace("-", "_")}.lean'
     open(out, 'w').write(witness_lean(step, stmt, gates, outw))
-    return out if compiles(out) else None
+    return good(out)
 
 def h_find(step, g, stmt):
     p = genprom.parse(' '.join(stmt.split()))
@@ -115,7 +122,7 @@ print('None')
     if not unread.check(n, mask, gates): return None
     out = f'{D}/{step.replace("-", "_")}.lean'
     open(out, 'w').write(genprom.lean(step, stmt, n, gates))
-    return out if compiles(out) else None
+    return good(out)
 
 def h_floor(step, g, stmt):
     flat = ' '.join(stmt.split())
@@ -124,13 +131,13 @@ def h_floor(step, g, stmt):
     sf = f'{D}/stmt_{step}.txt'; open(sf, 'w').write(stmt); out = f'{D}/{step.replace("-", "_")}.lean'
     try:
         r = subprocess.run(['python3', os.path.join(GEN, 'promise', 'gennone.py'), step, sf, out], capture_output=True, text=True, timeout=200)
-        if r.returncode == 0 and compiles(out): return out
+        if r.returncode == 0 and good(out): return out
     except subprocess.TimeoutExpired: pass
     if not any(i.endswith('LRAT.PromiseN') for i in g.get('imports', [])): return None
     try: r = subprocess.run(['python3', os.path.join(GEN, 'lratfloor', 'mkfloor.py'), step, sf, out, '240'], capture_output=True, text=True, timeout=400)
     except subprocess.TimeoutExpired: return None
     if r.returncode != 0 or os.path.getsize(out) > 500 * 1024: return None
-    return out if compiles(out) else None
+    return good(out)
 
 REP_MONO = re.compile(r'PEqualNP\.Represents\.RepSizeAtMost \((fun u v : Fin (\d+) => .*)\) (\d+)', re.S)
 REP_NOT = re.compile(r'∃ C : PEqualNP\.CircuitLowerBounds\.Circuit,\s*PEqualNP\.MetaComplexity\.FanInTwo C ∧ C\.size ≤ (\d+) ∧\s*PEqualNP\.Represents\.Represents \((fun u v : Fin (\d+) => .*)\) C', re.S)
@@ -183,7 +190,7 @@ print('None')
     gates = [(t, [a] if t == 'not' else [a, b]) for t, a, b in gl]
     out = f'{D}/{step.replace("-", "_")}.lean'
     open(out, 'w').write(witness_lean(step, stmt, gates, outw))
-    return out if compiles(out) else None
+    return good(out)
 
 
 def h_twolit(step, g, stmt):
@@ -192,7 +199,7 @@ def h_twolit(step, g, stmt):
     sf = f'{D}/stmt_{step}.txt'; open(sf, 'w').write(stmt); out = f'{D}/{step.replace("-", "_")}.lean'
     try: r = subprocess.run(['python3', os.path.join(GEN, 'twolit', 'twolit.py'), step, sf, out, '60'], capture_output=True, text=True, timeout=90)
     except subprocess.TimeoutExpired: return None
-    return out if r.returncode == 0 and compiles(out) else None
+    return good(out) if r.returncode == 0 else None
 
 HANDLERS = [('gift', h_gift), ('find', h_find), ('twolit', h_twolit), ('floor', h_floor), ('graph', h_graph)]
 

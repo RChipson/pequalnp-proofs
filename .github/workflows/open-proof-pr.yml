@@ -6,7 +6,7 @@ name: open-proof-pr
 on:
   push:
     branches: ['claude/**']
-    paths: ['generator/pr-requests.txt']
+    paths: ['generator/pr-requests.txt', 'generator/pr-close.txt']
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,7 +18,9 @@ jobs:
       # only the request list is needed, so only that file is checked out (the repository is large)
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: generator/pr-requests.txt
+          sparse-checkout: |
+            generator/pr-requests.txt
+            generator/pr-close.txt
           sparse-checkout-cone-mode: false
       - name: Open the pull requests that do not exist yet
         env:
@@ -50,3 +52,16 @@ jobs:
             gh pr create --repo "$UPSTREAM" --base main --head "$OWNER:$b" --title "$b" --body "$body" || fail=1
           done < <(tail -n 4 generator/pr-requests.txt | tac)
           exit $fail
+      # generator/pr-close.txt lists numbers of OUR OWN pull requests that were sent by mistake; they are closed.
+      - name: Close our own pull requests listed for withdrawal
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_TOKEN }}
+          UPSTREAM: open-goat/pequalnp-proofs
+          OWNER: RChipson
+        run: |
+          [ -f generator/pr-close.txt ] || exit 0
+          tail -n 4 generator/pr-close.txt | while read -r n rest; do
+            echo "$n" | grep -Eq '^[0-9]+$' || continue
+            a=$(gh pr view "$n" --repo "$UPSTREAM" --json author,state --jq '.author.login + " " + .state') || continue
+            if [ "$a" = "$OWNER OPEN" ]; then gh pr close "$n" --repo "$UPSTREAM"; else echo "left alone: $n ($a)"; fi
+          done
