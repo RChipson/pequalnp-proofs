@@ -62,7 +62,7 @@ def main():
         except Exception as e:
             print('note: the stop notice could not be read; going on')
     if cmd == 'next':
-        q = f'handle={HANDLE}'
+        q = f'handle={HANDLE}&model=unknown'      # join.txt: always send model=, or unknown
         if '--another' in sys.argv: q += '&another=1'
         if '--hard' in sys.argv: q += '&hard=1'
         for name in ('--level', '--kind'):
@@ -90,7 +90,11 @@ def main():
         d = json.loads(body)
         g = d.get('gap')
         if not g:
-            print(d.get('note') or d.get('error') or 'no step right now'); return 0
+            # join.txt: if no unit is handed out, ask again after the retry_after_s seconds the answer names
+            ra = d.get('retry_after_s')
+            if isinstance(ra, (int, float)) and ra > 0:
+                open(PAUSE, 'w').write(str(time.time() + min(float(ra), 3600)))
+            print((d.get('note') or d.get('error') or 'no step right now') + (f' [ask again after {int(ra)} s]' if isinstance(ra, (int, float)) else '')); return 0
         gid = g['id']
         assert re.fullmatch(r'L-[a-z]+-\d+', gid)
         # the lease is recorded first, so that a step is never held without a record of it
