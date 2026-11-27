@@ -97,8 +97,17 @@ def six_file(step, stmt, script='generator/sixinput/gen6.py', sub='six'):
     except subprocess.TimeoutExpired:
         return None, 'generator timed out'
     if r.returncode != 0: return None, (r.stdout + r.stderr).strip()[-200:]
-    # the files of the dense eight-vertex rows compile side by side (several copies of the loop work on them at once)
-    lock = '' if sub == 'onenot8k' else 'flock /tmp/lean.lock '
+    # one compile at a time: a file of the dense eight-vertex rows can need many gigabytes, and two side by side
+    # were killed for lack of memory (27 Nov); the searches of several copies still run side by side
+    lock = 'flock /tmp/lean.lock '
+    if sub == 'onenot8k':
+        # with a watch on memory: this machine has 15 GB, and a compile past 12 GB is stopped cleanly (files the
+        # checker accepted peaked at 5 to 11 GB here; the 15-gate graphs go past 12 GB and are not sent)
+        c = subprocess.run(f'{lock}python3 generator/onenot8k/compile_capped.py {out} 12.0', shell=True,
+                           capture_output=True, text=True, env=ENV)
+        last = (c.stdout.strip().split('\n') or [''])[-1]
+        if c.returncode != 0: return None, 'not sendable: ' + c.stdout.strip()[-300:]
+        return out, r.stdout.strip()[-120:] + ' | ' + last
     c = subprocess.run(f'cd {S}/up/lean && {lock}timeout 1500 lake env lean {out}', shell=True,
                        capture_output=True, text=True, env=ENV)
     bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
@@ -132,6 +141,7 @@ def eight_file(step, stmt):
     # data); the gate-elimination chain (generator/onenot8/gen8.py) is for the sparse ones
     out, why = six_file(step, stmt, 'generator/onenot8k/gen8k.py', 'onenot8k')
     if out: return out, why
+    log('dense eight-vertex generator, no file for', step, ':', str(why)[-300:].replace('\n', ' '))
     return six_file(step, stmt, 'generator/onenot8/gen8.py', 'onenot8')
 ONE8 = 'At fan-in two, one NOT gate saves nothing on edges'
 # the opposite rows: "It is false that: ..." and, as posted on 27 Nov, "Can one NOT gate shorten edge detection on ...?"
