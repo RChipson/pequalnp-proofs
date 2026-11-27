@@ -68,7 +68,7 @@ int main(int argc,char**argv){
   for(int i=0;i<n;i++){ if(fscanf(f,"%s %s",a,b)!=2) return 3; R[i]=rdw(a,b);} fclose(f);
   for(int v=0;v<n;v++){C[v]=0; for(int u=0;u<n;u++) if(R[u]>>v&1) C[v]|=(u128)1<<u;}
   f=fopen(argv[3],"r"); nb=0;
-  while(fgets(line,sizeof line,f)){ if(line[0]!='B') continue; int pp=-1; int k=sscanf(line+1,"%s %s %s %s %d",a,b,c,d,&pp); if(k<4) continue; S[nb]=rdw(a,b);T[nb]=rdw(c,d);p[nb]=(k==5&&pp>=0)?pp:nb;nb++; }
+  while(fgets(line,sizeof line,f)){ if(line[0]!='B') continue; int pp=-1; int k=sscanf(line+1,"%s %s %s %s %d",a,b,c,d,&pp); if(k<4) continue; S[nb]=rdw(a,b);T[nb]=rdw(c,d);p[nb]=(k==5&&pp>=0)?pp:nb; if(S[nb]==0||T[nb]==0){ if(k==5){fprintf(stderr,"an empty block in a file with a pairing\n");return 4;} continue; } nb++; }
   fclose(f);
   rs^=strtoull(argv[5],0,10)*0x9E3779B97F4A7C15ULL; for(int i=0;i<20;i++) rnd();
   double secs=atof(argv[6]),t0=atof(argv[7]),t1=atof(argv[8]);
