@@ -9,7 +9,7 @@ desk has given us with a lease.
     keep the lease 20 minutes and hand it back as statement_seems_false.  Otherwise stop and report.
   - any other step: stop and report, leaving the step held (a 20-minute hold job is started).
 Asks the desk for one more step whenever fewer than five are held."""
-import json, os, re, subprocess, sys, time
+import glob, json, os, re, subprocess, sys, time
 S = '/tmp/claude-0/-home-user-pequalnp-proofs/740307a3-5578-556b-b545-0397351cd4f4/scratchpad'
 REPO = '/home/user/pequalnp-proofs'
 os.chdir(REPO)
@@ -466,6 +466,18 @@ while True:
                 log('SENT (generic prover)', step, '|', tu.stdout.strip().split('\n')[0], '|', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
                 sent = True
         except subprocess.TimeoutExpired: pass
+    # A general lemma that no program of ours proves is kept for a proof by hand: one at a time, held on its
+    # renewal job (generator/hold.sh keeps a unit with /tmp/keep_<step> alive), and written to /tmp/look/<step>.txt
+    # so that the session is woken to work on it.  It is handed back with the honest reason if no proof comes.
+    finite = title.startswith(('Search:', 'A step toward:', 'Rung', 'Cut of', 'No cutting planes', 'Cutting planes', 'No run of clause learning',
+                               'Clause learning', 'Multiplexer', 'Resolution on', 'Res(', 'False:', 'It is false that', 'Find it:', 'Table '))
+    if (os.path.exists(f'.pnp/{step}.json') and not sent and not working and not own_rule and not finite and level not in ('hard', 'open')
+            and 'shard' not in d and len(stmt) < 4000 and stmt.lstrip().startswith('∀') and str(g.get('pr_open', '0')) in ('0', 'None')
+            and not os.path.exists(f'/tmp/reason_{step}_false') and not glob.glob('/tmp/look/*.txt')):
+        os.makedirs('/tmp/look', exist_ok=True)
+        open(f'/tmp/keep_{step}', 'w').write('by hand'); working = True
+        open(f'/tmp/look/{step}.txt', 'w').write(r.stdout)
+        log('LOOK: kept for a proof by hand:', step, '|', title[:120])
     if os.path.exists(f'.pnp/{step}.json') and not sent and not working and level not in ('hard', 'open'):
         why = open(f'/tmp/reason_{step}').read().strip() if os.path.exists(f'/tmp/reason_{step}') else 'other'
         if why not in ('statement_seems_false', 'missing_lemma', 'hypothesis_too_weak', 'does_not_elaborate'): why = 'other'
