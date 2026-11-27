@@ -1,0 +1,24 @@
+Notes on the dense eight-vertex rows "At fan-in two, one NOT gate saves nothing on edges ..." (27 Nov)
+
+Our generator gen8.py (gate-elimination chain) is one or two gates short on the dense graphs posted on 27 Nov
+(11 to 16 edges; the needed bound is 10 to 12 gates with NOT gates free).  The accepted proofs of these rows use
+search engines whose search runs inside Lean (decide +kernel).  One of them (for example the merged L_meta_28304;
+its header names its sources) changes only about 130 lines from graph to graph.  What changes, as decoded with
+decode_engine_data.py:
+
+  rows        0..63        64 true inputs that are not among the x of any pair below (y is the all-zero input)
+  X segments  one per x, x ascending as a number (bit v = vertex v): the pairs (x, y) with that x, y ascending
+  Y segments  one per independent set y, ascending: the same pairs grouped by y
+  a header row (all zero) closes every segment; HX and HY mark the headers; segsX, segsY list (start, end)
+  pairs       (edge, maximal independent set), (edge, empty set), and every (x true, x minus one vertex false)
+  rawP[v]     bit i = vertex v in x_i, bit NN + i = vertex v in y_i;  NN = number of rows
+  AA          the pair rows;  TG = rows whose x is a true input
+  rt1/rt2/rt3 lower bounds for the graph with one, two or three vertices deleted (mask, bound), proved in the file
+  the root    theorems chk [] rt 0 K t FF 1 = false for the bound K and t = 0..3, and okT for the larger t
+  the witness an AND/OR circuit of the optimal size and the posted edge list
+
+Not yet worked out: how the 64 extra inputs are chosen, and a fast way to compute the rt bounds (the engine
+itself, run outside Lean).  Without those, a file per graph needs many trial compilations.
+
+gen_pm3_no11.py (in generator/respond) writes the short counting proof for "Perfect matching on a 3 by 3 graph: no
+normal-form circuit of at most 11 gates opens with <gate>, then <gate>" (the argument of the merged L_meta_27140).
