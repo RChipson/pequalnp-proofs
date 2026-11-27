@@ -13,9 +13,17 @@ os.chdir('/home/user/pequalnp-proofs')
 ENV = dict(os.environ, PATH=os.path.expanduser('~/.elan/bin') + ':' + os.environ['PATH'], NOCHECK='1')
 step, secs = sys.argv[1], float(sys.argv[2])
 def log(*a): print(time.strftime('%H:%M:%S', time.gmtime()), step, *a, flush=True)
+# exact sizes already searched to the end without a circuit ("n mask k" per line), so that a row offered again
+# is settled at once instead of repeating a search longer than its hold time
+CACHE = os.path.join(HERE, 'exhausted.txt')
+def known_none(n, mask, k):
+    return os.path.exists(CACHE) and f'{n} {mask} {k}' in [l.strip() for l in open(CACHE)]
 if len(sys.argv) > 3:                      # child: one exact size
     n, mask, k = int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
-    g = genprom.circuit(n, mask, k); print('GATES' + repr(g)); sys.exit(0)
+    if known_none(n, mask, k): print('GATESNone'); sys.exit(0)
+    g = genprom.circuit(n, mask, k)
+    if g is None: open(CACHE, 'a').write(f'{n} {mask} {k}\n')
+    print('GATES' + repr(g)); sys.exit(0)
 lf = f'.pnp/{step}.json'
 stmt = json.load(open(lf))['gap']['statement'].strip()
 n, mask, bar = genprom.parse(' '.join(stmt.split()))
