@@ -83,6 +83,7 @@ def main():
             try: wait = float(json.loads(body).get('retry_after_s', 600))
             except Exception: wait = 600
             open(PAUSE, 'w').write(str(time.time() + wait + 20))
+            open('/tmp/desk_429.log', 'a').write(time.strftime('%H:%M:%S ', time.gmtime()) + ' '.join(body.split())[:400] + '\n')
             print('PAUSED by the desk: answered 429', body[:300]); return 3
         if code != 200:
             print('desk answered', code, body[:300]); return 1
