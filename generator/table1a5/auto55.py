@@ -489,4 +489,6 @@ while True:
         if why not in ('statement_seems_false', 'missing_lemma', 'hypothesis_too_weak', 'does_not_elaborate'): why = 'other'
         rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, why], capture_output=True, text=True)
         log('handed back at once', step, 'as', why, '|', rr.stdout.strip()[:60])
+        # be gentle with the desk: after a unit goes straight back, a minute passes before the next request
+        time.sleep(57)
     time.sleep(3)
