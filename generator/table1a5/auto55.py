@@ -97,7 +97,9 @@ def six_file(step, stmt, script='generator/sixinput/gen6.py', sub='six'):
     except subprocess.TimeoutExpired:
         return None, 'generator timed out'
     if r.returncode != 0: return None, (r.stdout + r.stderr).strip()[-200:]
-    c = subprocess.run(f'cd {S}/up/lean && flock /tmp/lean.lock timeout 1500 lake env lean {out}', shell=True,
+    # the files of the dense eight-vertex rows compile side by side (several copies of the loop work on them at once)
+    lock = '' if sub == 'onenot8k' else 'flock /tmp/lean.lock '
+    c = subprocess.run(f'cd {S}/up/lean && {lock}timeout 1500 lake env lean {out}', shell=True,
                        capture_output=True, text=True, env=ENV)
     bad = c.returncode != 0 or re.search(r'\berror\b', c.stdout + c.stderr)
     return (None, 'does not compile: ' + (c.stdout + c.stderr)[-400:]) if bad else (out, r.stdout.strip()[-120:])
@@ -126,9 +128,14 @@ def auto_file(step, stmt):
 SIX = ('Table 2: for the monotone six-input f', 'Table 2: six-input monotone f')
 SIXF = ('False: for the monotone six-input f', 'False: six-input monotone f')
 def eight_file(step, stmt):
+    # the dense graphs first (generator/onenot8k/gen8k.py: the search engine of a merged proof, with this graph's
+    # data); the gate-elimination chain (generator/onenot8/gen8.py) is for the sparse ones
+    out, why = six_file(step, stmt, 'generator/onenot8k/gen8k.py', 'onenot8k')
+    if out: return out, why
     return six_file(step, stmt, 'generator/onenot8/gen8.py', 'onenot8')
 ONE8 = 'At fan-in two, one NOT gate saves nothing on edges'
-ONE8F = 'It is false that: At fan-in two, one NOT gate saves nothing on edges'
+# the opposite rows: "It is false that: ..." and, as posted on 27 Nov, "Can one NOT gate shorten edge detection on ...?"
+ONE8F = ('It is false that: At fan-in two, one NOT gate saves nothing on edges', 'Can one NOT gate shorten edge detection on')
 def is8(st):
     return 'Fin 8 → Bool' in st
 ASK = 0
