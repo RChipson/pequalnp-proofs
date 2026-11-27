@@ -15,8 +15,12 @@ import synth_not
 
 PAT = re.compile(r'∃ C : PEqualNP\.CircuitLowerBounds\.Circuit, PEqualNP\.MetaComplexity\.FanInTwo C ∧ C\.size ≤ (\d+) ∧ PEqualNP\.Represents\.Represents \(fun u v : Fin (\d+) => \((\d+) : ℕ\)\.testBit \((\d+) \* u\.val \+ v\.val\)\) C')
 
+def norm(stmt):
+    """The statement on one line with the binders in the short spelling; used for matching only, never written out."""
+    return re.sub(r'fun \(u : Fin (\d+)\) \(v : Fin \1\) =>', r'fun u v : Fin \1 =>', ' '.join(stmt.split()))
+
 def parse(stmt):
-    m = PAT.fullmatch(stmt.strip())
+    m = PAT.fullmatch(norm(stmt))
     if not m or m.group(2) != m.group(4): return None
     return int(m.group(2)), int(m.group(3)), int(m.group(1))        # side, mask, bar
 

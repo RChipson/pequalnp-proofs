@@ -138,6 +138,9 @@ for st in held():
     hold(st, r0)
 # a bounded run: after this many minutes no new step is asked for and the loop ends by itself (steps
 # still held keep their renewal jobs, which hand them back on schedule)
+BIND = r'fun (?:u v : Fin \d+|\(u : Fin \d+\) \(v : Fin \d+\)) => \(\d+ : ℕ\)\.testBit \(\d+ \* u\.val \+ v\.val\)'
+MONOROW = re.compile(r'PEqualNP\.Represents\.RepSizeAtMost \(' + BIND + r'\) \d+')
+NOTROW = re.compile(r'∃ C : PEqualNP\.CircuitLowerBounds\.Circuit, PEqualNP\.MetaComplexity\.FanInTwo C ∧ C\.size ≤ \d+ ∧ PEqualNP\.Represents\.Represents \(' + BIND + r'\) C')
 MINUTES = int(sys.argv[sys.argv.index('--minutes') + 1]) if '--minutes' in sys.argv else 100
 T_END = time.time() + MINUTES * 60
 COPY = int(sys.argv[sys.argv.index('--copy') + 1]) if '--copy' in sys.argv else 0
@@ -303,7 +306,7 @@ while True:
                 log('handed back', step, 'as statement_seems_false |', rr.stdout.strip()[:80])
             else:
                 log('six-input refutation row', step, ': twin not proved (', why[:120], '); handing back after 20 minutes')
-    elif 'is represented on the one-a-side promise by an AND/OR circuit of fan-in two with at most' in title:
+    elif 'is represented on the one-a-side promise by an AND/OR circuit of fan-in two with at most' in title or MONOROW.fullmatch(' '.join(stmt.split())):
         # a graph given by a mask, AND/OR gates only: the mixed-OR block circuit (generator/keycover/row8.py)
         dm = f'{S}/desk/row8'; os.makedirs(dm, exist_ok=True)
         sf = f'{dm}/stmt_{step}.txt'; open(sf, 'w').write(stmt); om = f'{dm}/{step.replace("-", "_")}.lean'
@@ -384,7 +387,7 @@ while True:
             log('one-NOT row', step, ':', msg, '; handed back as statement_seems_false |', rr.stdout.strip()[:80])
         else:
             log('one-NOT row', step, ':', msg, '; handing back after 20 minutes')
-    elif 'is represented on the one-a-side promise by an AND/OR/NOT circuit' in title and not stmt.startswith('¬'):
+    elif ('is represented on the one-a-side promise by an AND/OR/NOT circuit' in title and not stmt.startswith('¬')) or NOTROW.fullmatch(' '.join(stmt.split())):
         # a "find" row of the promise family (generator/promise/quick_find.py): if a circuit within the bar is
         # found it is the proof; if the exhaustive search (bars up to 7 gates) ends without one, the row is
         # handed back at once as statement_seems_false; otherwise it is handed back after twenty minutes.
@@ -409,7 +412,8 @@ while True:
             # undecided: the hold time goes into the full search (generator/promise/deep.py), two rows at a time at most
             busy = int(subprocess.run('pgrep -fc "promise/deep.py L-"', shell=True, capture_output=True, text=True).stdout.strip() or 0)
             level_now = (d['lease'].get('terms') or {}).get('level', '')
-            if rc == 3 and busy < 1 and level_now in ('hard', 'open'):
+            # while the desk offers few units, an undecided row of any level gets the full search for its hold time
+            if rc == 3 and busy < 1 and (level_now in ('hard', 'open') or len(held()) <= 2):
                 subprocess.Popen(['python3', 'generator/promise/deep.py', step, '1000'], stdout=open(f'/tmp/deep_{step}.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
                 log('promise row', step, ':', msg, '; full search started for the 20 minutes it is held')
             else:
@@ -456,7 +460,7 @@ while True:
     sent = any(l.split()[:1] == [step] for l in open('generator/pr-requests.txt'))
     working = subprocess.run(['pgrep', '-f', f'deep.py {step} '], capture_output=True).returncode == 0 or os.path.exists(f'/tmp/keep_{step}')
     # families that have their own rule above were already searched; the generic provers are for the rest
-    own_rule = any(k in title for k in ('is represented on the one-a-side promise by an AND/OR', 'with a one-input NOT gate computes f',
+    own_rule = bool(MONOROW.fullmatch(' '.join(stmt.split())) or NOTROW.fullmatch(' '.join(stmt.split()))) or any(k in title for k in ('is represented on the one-a-side promise by an AND/OR', 'with a one-input NOT gate computes f',
                                          'has a fan-in-two AND/OR circuit of at most', 'Rectangles:', 'The two-lit function'))
     if os.path.exists(f'.pnp/{step}.json') and not sent and not working and not own_rule:
         # before a unit goes back: the generic provers (generator/respond/try_unit.py)

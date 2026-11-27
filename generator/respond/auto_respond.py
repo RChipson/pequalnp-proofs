@@ -153,10 +153,11 @@ def table_of(step, fn, n):
 
 def h_graph(step, g, stmt):
     """a find row on a graph given by an expression: monotone (RepSizeAtMost) or with NOT gates"""
-    m = REP_MONO.fullmatch(stmt); mono = True
+    sn = re.sub(r'fun \(u : Fin (\d+)\) \(v : Fin \1\) =>', r'fun u v : Fin \1 =>', stmt)   # for matching only
+    m = REP_MONO.fullmatch(sn); mono = True
     if m: fn, n, bar = m.group(1), int(m.group(2)), int(m.group(3))
     else:
-        m = REP_NOT.fullmatch(stmt); mono = False
+        m = REP_NOT.fullmatch(sn); mono = False
         if not m: return None
         bar, fn, n = int(m.group(1)), m.group(2), int(m.group(3))
     if n > 6 or bar > 12: return None

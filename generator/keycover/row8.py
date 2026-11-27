@@ -7,7 +7,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE); sys
 import mixed, auto_respond as A
 step, sf, out = sys.argv[1:4]
 stmt = open(sf).read().strip()
-m = re.fullmatch(r'PEqualNP\.Represents\.RepSizeAtMost \(fun u v : Fin (\d+) => \((\d+) : ℕ\)\.testBit \((\d+) \* u\.val \+ v\.val\)\) (\d+)', ' '.join(stmt.split()))
+m = re.fullmatch(r'PEqualNP\.Represents\.RepSizeAtMost \(fun u v : Fin (\d+) => \((\d+) : ℕ\)\.testBit \((\d+) \* u\.val \+ v\.val\)\) (\d+)', re.sub(r'fun \(u : Fin (\d+)\) \(v : Fin \1\) =>', r'fun u v : Fin \1 =>', ' '.join(stmt.split())))
 if not m or m.group(1) != m.group(3) or int(m.group(1)) > 16: print('not a row of this family'); sys.exit(3)
 n, mask, bar = int(m.group(1)), int(m.group(2)), int(m.group(4))
 best = None
