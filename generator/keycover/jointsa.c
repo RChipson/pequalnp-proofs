@@ -23,6 +23,13 @@ int n; u128 R[128],C[128]; u128 S[MAXB],T[MAXB]; int p[MAXB]; int nb; int cov[12
 static u128 rdw(const char*a,const char*b){return ((u128)strtoull(a,0,16)<<64)|strtoull(b,0,16);}
 static unsigned short cnt[MAXI][MAXI];
 static int sets[2*MAXB][MAXL], len[2*MAXB];
+// greedy sharing with a heap of candidate pairs (stale entries are checked against the counts when popped)
+static unsigned long long *heap; static long hn=0,hcap=0;
+static inline void hpush(unsigned long long k){ if(hn>=hcap){hcap=hcap?hcap*2:1<<16; heap=realloc(heap,hcap*sizeof *heap);} long i=hn++; heap[i]=k; while(i>0){ long q=(i-1)/2; if(heap[q]>=heap[i]) break; unsigned long long t=heap[q];heap[q]=heap[i];heap[i]=t;i=q; } }
+static inline unsigned long long hpop(void){ unsigned long long top=heap[0]; heap[0]=heap[--hn]; long i=0; for(;;){ long l=2*i+1,r=l+1,m=i; if(l<hn&&heap[l]>heap[m]) m=l; if(r<hn&&heap[r]>heap[m]) m=r; if(m==i) break; unsigned long long t=heap[m];heap[m]=heap[i];heap[i]=t;i=m; } return top; }
+static int *touched; static long tn=0,tcap=0;
+static inline void touch(int a,int b){ if(tn+2>tcap){tcap=tcap?tcap*2:1<<16; touched=realloc(touched,tcap*sizeof *touched);} touched[tn++]=a; touched[tn++]=b; }
+#define KEY(c,a,b) (((unsigned long long)(c)<<40)|((unsigned long long)(a)<<20)|(unsigned long long)(b))
 static int paar_cost(void){
   int ns=0,terms=0;
   for(int i=0;i<nb;i++){
@@ -31,26 +38,27 @@ static int paar_cost(void){
     else if(i<p[i]){ int j=p[i]; int l=0; for(int u=0;u<n;u++) if(S[i]>>u&1) sets[ns][l++]=u; for(int v=0;v<n;v++) if(T[j]>>v&1) sets[ns][l++]=n+v; len[ns++]=l;
       l=0; for(int u=0;u<n;u++) if(S[j]>>u&1) sets[ns][l++]=u; for(int v=0;v<n;v++) if(T[i]>>v&1) sets[ns][l++]=n+v; len[ns++]=l; terms++; }
   }
-  int ni=2*n; int tot=0; for(int s=0;s<ns;s++) tot+=len[s];
-  int cap=2*n+tot+4; if(cap>MAXI) cap=MAXI;
-  for(int a=0;a<cap;a++) memset(cnt[a],0,sizeof(unsigned short)*cap);
-  for(int s=0;s<ns;s++) for(int i=0;i<len[s];i++) for(int j=i+1;j<len[s];j++){ int a=sets[s][i],b=sets[s][j]; if(a>b){int t=a;a=b;b=t;} cnt[a][b]++; }
+  int ni=2*n; hn=0; tn=0;
+  for(int s=0;s<ns;s++) for(int i=0;i<len[s];i++) for(int j=i+1;j<len[s];j++){ int a=sets[s][i],b=sets[s][j]; if(a>b){int t=a;a=b;b=t;} if(cnt[a][b]==0) touch(a,b); cnt[a][b]++; }
+  for(long q=0;q<tn;q+=2){ int a=touched[q],b=touched[q+1]; if(cnt[a][b]>=2) hpush(KEY(cnt[a][b],a,b)); }
   int defs=0;
-  for(;;){
-    int best=1,ba=-1,bb=-1;
-    for(int s=0;s<ns;s++) for(int i=0;i<len[s];i++) for(int j=i+1;j<len[s];j++){ int a=sets[s][i],b=sets[s][j]; if(a>b){int t=a;a=b;b=t;} int c=cnt[a][b]; if(c>best){best=c;ba=a;bb=b;} }
-    if(ba<0||ni>=cap-1) break;
+  while(hn>0){
+    unsigned long long k=hpop(); int c=(int)(k>>40),ba=(int)((k>>20)&0xFFFFF),bb=(int)(k&0xFFFFF);
+    int cc=cnt[ba][bb];
+    if(cc!=c){ if(cc>=2) hpush(KEY(cc,ba,bb)); continue; }
+    if(ni>=MAXI-1) break;
     int z=ni++; defs++;
     for(int s=0;s<ns;s++){
       int ia=-1,ib=-1; for(int i=0;i<len[s];i++){ if(sets[s][i]==ba) ia=i; else if(sets[s][i]==bb) ib=i; }
       if(ia<0||ib<0) continue;
       for(int i=0;i<len[s];i++){ int x=sets[s][i]; if(x==ba||x==bb) continue;
-        int a=ba<x?ba:x,b=ba<x?x:ba; cnt[a][b]--; a=bb<x?bb:x; b=bb<x?x:bb; cnt[a][b]--; cnt[x][z]++; }
+        int a=ba<x?ba:x,b=ba<x?x:ba; cnt[a][b]--; a=bb<x?bb:x; b=bb<x?x:bb; cnt[a][b]--;
+        if(cnt[x][z]==0) touch(x,z); cnt[x][z]++; if(cnt[x][z]>=2) hpush(KEY(cnt[x][z],x,z)); }
       cnt[ba][bb]--;
-      // remove a,b ; add z
       int l=0; for(int i=0;i<len[s];i++){ int x=sets[s][i]; if(x!=ba&&x!=bb) sets[s][l++]=x; } sets[s][l++]=z; len[s]=l;
     }
   }
+  for(long q=0;q<tn;q+=2) cnt[touched[q]][touched[q+1]]=0;
   int c=defs; for(int s=0;s<ns;s++) c+=len[s]-1;
   return c+terms+terms-1;
 }
