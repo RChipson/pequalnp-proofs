@@ -167,9 +167,9 @@ while True:
     if not m:
         log('none', extra, ':', r.stdout.strip().split('\n')[0][:100])
         # wait (20 seconds in a burst, 90 otherwise, 150 if the checker is behind), or less when the responder reports new rows
-        t_wait = time.time() + (150 if 'checker is behind' in r.stdout else WAIT_BURST if burst else WAIT_QUIET)
+        # 'Ask again in a few minutes' when the desk says no unit is free; otherwise the usual gaps
+        t_wait = time.time() + (150 if 'checker is behind' in r.stdout else 200 if 'No unit is free right now' in r.stdout else WAIT_BURST if burst else WAIT_QUIET)
         while time.time() < t_wait:
-            if os.path.exists('/tmp/ask_now') and os.path.getmtime('/tmp/ask_now') > asked_at and time.time() - asked_at > 3: break
             time.sleep(1)
         continue
     step = m.group(1)
