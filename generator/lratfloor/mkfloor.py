@@ -22,7 +22,8 @@ def main():
     stmt = open(sf).read().strip()
     flat = ' '.join(stmt.split())
     if flat.startswith('¬ (') and flat.endswith(')'): flat = '¬ ' + flat[3:-1]        # the same statement written with brackets
-    m = PAT.fullmatch(flat)            # the statement is kept as posted; only the match ignores spacing
+    flat = re.sub(r'fun \(u : Fin (\d+)\) \(v : Fin \1\) =>', r'fun u v : Fin \1 =>', flat)   # either binder spelling
+    m = PAT.fullmatch(flat)            # the statement is kept as posted; only the match ignores spacing and spelling
     if not m or m.group(2) != m.group(4): print('not a row of this family'); return 2
     s, n, M = int(m.group(1)), int(m.group(2)), int(m.group(3))
     work = f'{S}/lrat/work'; os.makedirs(work, exist_ok=True)
