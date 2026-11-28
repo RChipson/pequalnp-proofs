@@ -33,7 +33,7 @@ T_END = time.time() + MINUTES * 60
 TRIED = f'/tmp/sweep_tried_{FAM}.txt' if SEARCH else '/tmp/sweep_tried_three.txt' if THREE else '/tmp/sweep_tried_six.txt' if SIX else '/tmp/sweep_tried.txt'      # rows already asked for
 LIST = f'{S}/gaps_sweep.json'
 
-LOGF = '/tmp/loop_three.log' if THREE else ['/tmp/loop_now.log', '/tmp/loop_1.log', '/tmp/loop_2.log'][COPY % 3]     # the files the checks read
+LOGF = f'/tmp/loop_{FAM}_{COPY}.log' if SEARCH else '/tmp/loop_three.log' if THREE else ['/tmp/loop_now.log', '/tmp/loop_1.log', '/tmp/loop_2.log'][COPY % 3]     # the files the checks read
 open(LOGF, 'w').close()
 def log(*a):
     line = ' '.join(str(x) for x in (time.strftime('%H:%M:%S', time.gmtime()),) + a)
@@ -51,8 +51,8 @@ def swap_kb():
     except Exception: return 0
 
 def free_rows():
-    # the public list, fetched at most once a minute by all copies together
-    if not os.path.exists(LIST) or time.time() - os.path.getmtime(LIST) > 60:
+    # the public list, fetched at most every 25 seconds by all copies together
+    if not os.path.exists(LIST) or time.time() - os.path.getmtime(LIST) > 25:
         subprocess.run(['curl', '-s', '-m', '60', 'https://data.pequalnp.com/data/desk/gaps.json', '-o', LIST + f'.{COPY}'], capture_output=True)
         try: json.load(open(LIST + f'.{COPY}')); os.replace(LIST + f'.{COPY}', LIST)
         except Exception: pass
@@ -99,7 +99,9 @@ def gen_search(step, stmt):
     d = f'{S}/desk/sweep_{FAM}'; os.makedirs(d, exist_ok=True)
     sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
     out = f'{d}/{step.replace("-", "_")}.lean'
-    cmd = ['python3', 'generator/encoder/rowrect2.py', step, sf, out] if FAM == 'promise' else ['python3', 'generator/twolit/twolit.py', step, sf, out, '90']
+    # two-lit rows: only the quick shape-first search (a second or two); a row it cannot do is passed over at once,
+    # because the quick rows of a batch are gone within minutes
+    cmd = ['python3', 'generator/encoder/rowrect2.py', step, sf, out] if FAM == 'promise' else ['python3', 'generator/twolit/twolit2.py', step, sf, out]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=600 if FAM == 'promise' else 120)
     except subprocess.TimeoutExpired:
@@ -224,6 +226,7 @@ if FROM_STOCK:
         if send_proved(step, src, open(src + '.stmt').read().strip()): os.replace(src, src + '.sent')
     log('bounded run over (from stock); held now:', held()); sys.exit(0)
 
+dry = False
 if SIX:
     # A quick look first (under a minute, nothing asked of the desk): is there a circuit of 10 or 11 gates?  Then the
     # row is taken from the desk by name BEFORE the proof is built (next --unit), so that it is ours alone while the
@@ -232,7 +235,9 @@ if SIX:
         if len(held()) >= 5: time.sleep(5); continue
         g = claim(free_rows())
         if not g:
-            log('no free row of the family left that we have not tried; looking again in a minute'); time.sleep(60); continue
+            if not dry: log('no free row of the family left that we have not tried; looking again every 20 seconds')
+            dry = True; time.sleep(20); continue
+        dry = False
         want = g['id']; stmt = (g.get('statement') or '').strip()
         # the data and the file are made now (searches outside Lean, about a minute); the compile, which is the
         # proof being checked, comes after the row is taken
