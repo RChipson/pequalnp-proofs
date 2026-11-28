@@ -71,6 +71,10 @@ def main():
         if '--value' in sys.argv: q += '&value=1'   # value steps are handed out only when asked for
         v = opt('--proof-of', r'L-[a-z]+-[0-9]+')
         if v: q += f'&gap={v}&have=proof'
+        # --unit <id>: that exact unit if the desk leases it to us, otherwise nothing (tools/pnp.sh next --unit)
+        want = opt('--unit', r'L-[a-z]+-[0-9]+')
+        assert not (v and want), 'give --unit or --proof-of, not both'
+        if want: q += f'&gap={want}'
         # a pause or a rate limit from the desk is respected by every caller: nothing is asked until it is over
         PAUSE = '/tmp/desk_paused_until'
         if os.path.exists(PAUSE):
@@ -89,6 +93,9 @@ def main():
             print('desk answered', code, body[:300]); return 1
         d = json.loads(body)
         g = d.get('gap')
+        if not g and want:
+            # the reference prints the desk's reason and leases nothing; no pause follows from a refusal of one unit
+            print('not leased:', ' '.join(str(d.get('note') or d.get('error') or 'no reason given').split())[:300]); return 4
         if not g:
             # join.txt: if no unit is handed out, ask again after the retry_after_s seconds the answer names
             ra = d.get('retry_after_s')

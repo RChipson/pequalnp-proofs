@@ -256,7 +256,19 @@ def build(step, stmt, secs=20.0, seed=1, log=print):
     t = t.replace('import PEqualNP.Defs\n', 'import PEqualNP.Defs\n\n-- The whole proof text is that of the merged ' + TEMPLATE_ID + ' (same repository, Apache-2.0), whose header follows;\n-- only the data of this graph (rows, tables of sub-bounds, bounds, witness) was computed anew.\n' + note, 1)
     return t, dict(m=m, L=L, NN=NN, sizes={''.join(map(str, Z)): s for Z, s in size.items()})
 
+def probe(stmt, secs=12.0, top=14):
+    """A quick look before a row is taken: the least number of gates up to `top` for which a circuit of the usual
+    shape is found within the time, or None (then the graph very likely needs more, and its file is a heavy one)."""
+    p = parse(stmt)
+    if not p: return None
+    E, _ = p
+    k, _, _ = mono(E, list(range(8)), top, top, secs, shaped=True)
+    return k
+
 if __name__ == '__main__':
+    if sys.argv[1] == '--probe':
+        k = probe(open(sys.argv[2]).read().strip(), float(sys.argv[3]) if len(sys.argv) > 3 else 12.0)
+        print('PROBE', k); sys.exit(0 if k else 4)
     step, sf, out = sys.argv[1:4]; secs = float(sys.argv[4]) if len(sys.argv) > 4 else 20.0
     r = build(step, open(sf).read().strip(), secs)
     if not r: print('not a row of this family, or no data'); sys.exit(3)
