@@ -133,6 +133,12 @@ def build(step, stmt):
     except Exception: gates = 0
     if gates >= 15:
         return None, f'a {gates}-gate graph: its file takes too long and too much memory to compile here'
+    try:
+        sz = json.load(open(out + '.json'))['sizes']; top1 = max(v for k, v in sz.items() if len(k) == 1)
+    except Exception: top1 = 0
+    if top1 >= gates - 1:
+        # a sub-bound only one below the whole graph's: such files went past 12 GB here every time (28 Nov)
+        return None, f'{gates} gates with a {top1}-gate part: its file needs more memory than this machine has'
     # one compile at a time; a 15-gate file on one thread, so that only one heavy step is in memory at a time
     pre = 'LEAN_ARGS=-j1 ' if gates >= 15 else ''
     # at most 12 GB and seven minutes: the 14-gate files that were accepted needed 5 to 11 GB and under three
