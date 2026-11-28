@@ -75,7 +75,7 @@ def build_six(step, stmt):
     except subprocess.TimeoutExpired:
         return None, 'the search for a witness circuit timed out'
     if r.returncode != 0: return None, (r.stdout + r.stderr).strip()[-200:].replace('\n', ' ')
-    c = subprocess.run(f'flock /tmp/lean.lock python3 generator/onenot8k/compile_capped.py {out} 40', shell=True,
+    c = subprocess.run(f'flock /tmp/lean_six_{COPY % 2}.lock python3 generator/onenot8k/compile_capped.py {out} 40 420', shell=True,
                        capture_output=True, text=True, env=ENV)
     last = (c.stdout.strip().split('\n') or [''])[-1]
     if c.returncode != 0: return None, r.stdout.strip()[-70:] + ' | does not compile here: ' + c.stdout.strip()[-200:].replace('\n', ' ')
@@ -125,35 +125,52 @@ if PREPARE:
         stock_one(g)
     log('bounded run over (prepare only)'); sys.exit(0)
 
+def send_proved(step, src, stmt):
+    """A row whose proof is compiled and in hand: lease it (next --proof-of, join.txt) and send it at once."""
+    free = {g['id']: g for g in free_rows()}
+    if step in free and (free[step].get('statement') or '').strip() != stmt:
+        log('proved', step, ': the statement on the list differs; left unsent'); return False
+    while len(held()) >= 5: time.sleep(5)
+    time.sleep(3 + COPY)
+    r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--proof-of', step], capture_output=True, text=True)
+    if r.returncode == 120: log('STOPPED by the project:', r.stdout.strip()[:200]); sys.exit(0)
+    m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
+    if not m or m.group(1) != step:
+        log('not leased', step, '|', r.stdout.strip().split('\n')[-1][:160])
+        if m: subprocess.run(['python3', 'generator/desk.py', 'release', m.group(1), 'other'], capture_output=True, text=True)
+        if 'PAUSED' in r.stdout: time.sleep(60)
+        return False
+    hold(step, 'out_of_time')
+    lease = json.load(open(f'.pnp/{step}.json')); pts = (lease['lease'].get('terms') or {}).get('points')
+    if lease['gap']['statement'].strip() != stmt or str(lease['gap'].get('pr_open', '0')) not in ('0', 'None'):
+        log(step, ': the leased statement differs or a pull request is already waiting; handed back')
+        subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True); return False
+    s = subprocess.run(['bash', 'generator/submit.sh', step, src], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
+    log('SENT', step, '|', pts, 'points |', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
+    return True
+
 if FROM_STOCK:
     assert SIX
     names = sorted(f[:-5] for f in os.listdir(STOCK) if f.endswith('.lean'))
     for nm in names:
         if time.time() > T_END: break
         step = nm.replace('_', '-'); src = f'{STOCK}/{nm}.lean'
-        free = {g['id']: g for g in free_rows()}
-        if step not in free:
+        if step not in {g['id'] for g in free_rows()}:
             log('stocked', step, 'is no longer free; left unsent'); os.replace(src, src + '.gone'); continue
-        if (free[step].get('statement') or '').strip() != open(src + '.stmt').read().strip():
-            log('stocked', step, ': the statement changed; left unsent'); continue
-        while len(held()) >= 5: time.sleep(5)
-        time.sleep(4)
-        r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--proof-of', step], capture_output=True, text=True)
-        m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
-        if not m or m.group(1) != step:
-            log('not leased', step, '|', r.stdout.strip().split('\n')[-1][:160])
-            if m: subprocess.run(['python3', 'generator/desk.py', 'release', m.group(1), 'other'], capture_output=True, text=True)
-            if 'PAUSED' in r.stdout: time.sleep(60)
-            continue
-        hold(step, 'out_of_time')
-        lease = json.load(open(f'.pnp/{step}.json')); pts = (lease['lease'].get('terms') or {}).get('points')
-        if lease['gap']['statement'].strip() != open(src + '.stmt').read().strip():
-            log(step, ': the leased statement differs from the stocked one; handed back')
-            subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True); continue
-        s = subprocess.run(['bash', 'generator/submit.sh', step, src], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
-        log('SENT', step, '|', pts, 'points | from stock |', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
-        os.replace(src, src + '.sent')
+        if send_proved(step, src, open(src + '.stmt').read().strip()): os.replace(src, src + '.sent')
     log('bounded run over (from stock); held now:', held()); sys.exit(0)
+
+if SIX:
+    while time.time() < T_END:
+        g = claim(free_rows())
+        if not g:
+            log('no free row of the family left that we have not tried; looking again in a minute'); time.sleep(60); continue
+        step = g['id']; stmt = (g.get('statement') or '').strip()
+        out, why = build_six(step, stmt)
+        if not out: log('no proof for', step, '|', str(why)[:170]); continue
+        log('PROVED', step, '|', why)
+        send_proved(step, out, stmt)
+    log('bounded run over; held now:', held()); sys.exit(0)
 
 idle = 0
 while time.time() < T_END:

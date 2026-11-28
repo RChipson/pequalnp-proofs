@@ -17,8 +17,8 @@ Exit 0: file written (whether the search really rejects is decided by Lean when 
 Exit 1: the method does not apply (a function that ignores an input, fewer than 7 gates, no circuit found)."""
 import os, random, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-import gen6
+sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, '..', 'encoder'))
+import gen6, msynth
 N = 6
 TEMPLATE_ID = 'L_meta_36404'
 T_OLD = '4278124266 * 2 ^ 32 + 4277075656'
@@ -33,6 +33,26 @@ def synth(T, k, secs):
     except subprocess.TimeoutExpired:
         return 'timeout'
     return eval(r.stdout[5:]) if r.stdout.startswith('GATES') else None
+
+def least_at(T, k, secs):
+    """A monotone circuit of exactly k gates for the table T, or None (none exists, or none found in the time).
+    A circuit of AND and OR gates is monotone, so it is right everywhere once it is right on the least true points
+    and the greatest false points: only those rows go to the SAT search.  The result is checked on all 64 inputs."""
+    f = lambda x: T >> x & 1
+    mint = [x for x in range(64) if f(x) and all(not f(x ^ (1 << j)) for j in range(N) if x >> j & 1)]
+    maxf = [x for x in range(64) if not f(x) and all(f(x | (1 << j)) for j in range(N) if not x >> j & 1)]
+    rows = mint + maxf; R = len(rows)
+    incols = [sum(1 << r for r, x in enumerate(rows) if x >> i & 1) for i in range(N)]
+    target = sum(1 << r for r, x in enumerate(rows) if f(x))
+    res = msynth.search(N, incols, R, [target], k, 'andor', secs, 0)
+    if not isinstance(res, tuple): return None
+    gates, outw = res[0], res[1][0]
+    def ev(x):
+        w = [bool(x >> i & 1) for i in range(N)]
+        for op, a, b in gates: w.append((w[a] and w[b]) if op == 'and' else (w[a] or w[b]))
+        return w[outw]
+    if not all(ev(x) == bool(f(x)) for x in range(64)): return None
+    return gates, outw
 
 def pairs_for(T, seed):
     f = lambda x: T >> x & 1
@@ -63,15 +83,21 @@ def build(step, stmt, seed=1, slice_len=6, log=print):
         if all(f(x) == f(x ^ (1 << j)) for x in range(64)): log(f'the function ignores input {j}: not this method'); return None
     if any(f(x) and not f(x | (1 << j)) for x in range(64) for j in range(N)): log('not monotone'); return None
     gates = None
-    # The fewest gates found, looking from 9 up (the functions of these batches need 9 to 12; a search that times
-    # out is passed over).  If the true least size is smaller than the one used, Lean's search finds a derivation
-    # and the file does not compile: nothing wrong can be sent.
-    for k, secs in ((9, 30), (10, 60), (11, 90), (12, 120), (8, 30), (7, 30), (13, 120)):
-        g = synth(T, k, secs)
-        if g == 'timeout': log(f'the search for a circuit of {k} gates timed out'); continue
-        if g and gen6.check_circuit(T, g): gates = g; break
-    if not gates: log('no monotone circuit of 7 to 13 gates found (fewer than 7 gates is not this method)'); return None
-    m = len(gates); n = m - 2; k = m - 3; e = m - 7; out = N + m - 1
+    # The fewest gates found, looking DOWN from 12: a circuit of a size that exists is found in seconds, while
+    # showing that none exists takes long, so the first size that gives nothing within the time ends the descent.
+    # If the true least size is smaller than the one used, Lean's search finds a derivation and the file does not
+    # compile: nothing wrong can be sent.
+    gates = None; outw = None
+    for k in (12, 11, 10, 9, 8, 7):
+        g = least_at(T, k, 40 if k >= 9 else 25)
+        if not g:
+            if gates is None and k == 12:
+                g = least_at(T, 13, 60)
+                if g: gates, outw = g
+            break
+        gates, outw = g
+    if not gates: log('no monotone circuit of 7 to 13 gates found'); return None
+    m = len(gates); n = m - 2; k = m - 3; e = m - 7; out = outw
     ps, nnear = pairs_for(T, seed)
     row = lambda j: sum((p >> j & 1) << i for i, (p, q) in enumerate(ps)) | sum((q >> j & 1) << (128 + i) for i, (p, q) in enumerate(ps))
     rows = [row(j) for j in range(N)]

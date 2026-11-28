@@ -46,7 +46,8 @@ def run(path, cap=6.4, seconds=1500):
 
 if __name__ == '__main__':
     cap = float(sys.argv[2]) if len(sys.argv) > 2 else 6.4
-    peak, secs, verdict, txt = run(sys.argv[1], cap)
+    limit = float(sys.argv[3]) if len(sys.argv) > 3 else 1500      # seconds
+    peak, secs, verdict, txt = run(sys.argv[1], cap, limit)
     if verdict == 'failed': print(txt[-600:])
     print(f'PEAK {peak:.1f} {secs:.0f} {verdict}')
     sys.exit({'ok': 0, 'over': 4, 'failed': 1}[verdict])
