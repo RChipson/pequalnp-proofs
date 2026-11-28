@@ -91,16 +91,13 @@ def build(step, stmt, seed=1, slice_len=6, log=print):
     gates = None; outw = None
     # 10 gates first, then 11.  (12-gate functions were tried on 28 Nov: six files in a row did not compile here
     # within seven minutes and 13 GB, so they are left alone.)
-    g = least_at(T, 10, 45)
-    if g:
-        gates, outw = g
-        for k, secs in ((9, 25), (8, 15), (7, 10)):
-            g = least_at(T, k, secs)
-            if not g: break
-            gates, outw = g
-    else:
-        g = least_at(T, 11, 45)
-        if not g: log('no circuit of 10 or 11 gates found in the time: left alone'); return None
+    # 11 gates are looked for first: most rows still free need 12 or more, and this passes them over in one step.
+    g = least_at(T, 11, 45)
+    if not g: log('no circuit of 11 gates found in the time: left alone'); return None
+    gates, outw = g
+    for k, secs in ((10, 45), (9, 25), (8, 15), (7, 10)):
+        g = least_at(T, k, secs)
+        if not g: break
         gates, outw = g
     m = len(gates); n = m - 2; k = m - 3; e = m - 7; out = outw
     ps, nnear = pairs_for(T, seed)
