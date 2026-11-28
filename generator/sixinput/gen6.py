@@ -85,7 +85,8 @@ def samples(T, n, tries=400, seed=1, good=20000, climb_seconds=120):
     Random choices first, then hill climbing: one pair is swapped for another and the change is kept
     when the search still answers false with fewer calls."""
     import time
-    exe = '/tmp/livesearch_gen6'
+    # one program per run: several runs side by side must not rebuild a program another one is executing
+    exe = f'/tmp/livesearch_gen6_{os.getpid()}'
     subprocess.run(['gcc', '-O2', '-o', exe, f'{HERE}/livesearch.c'], check=True)
     tr = [r for r in range(1 << N) if T >> r & 1]; fa = [r for r in range(1 << N) if not T >> r & 1]
     near = [(p, q) for p in tr for q in fa if bin(p ^ q).count('1') == 1]
