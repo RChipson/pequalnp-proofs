@@ -23,7 +23,7 @@ FAM = sys.argv[sys.argv.index('--family') + 1] if '--family' in sys.argv else 'o
 # through the same loop as the six-input rows
 THREE = FAM == 'three'
 SIX = FAM in ('six', 'three')
-FAMILY = 'Three ordered outputs' if THREE else 'Table 2: for the monotone six-input f' if SIX else 'At fan-in two, one NOT gate saves nothing on edges'
+FAMILY = ('Three ordered outputs', 'On five input bits, three ordered outputs') if THREE else 'Table 2: for the monotone six-input f' if SIX else 'At fan-in two, one NOT gate saves nothing on edges'
 MINUTES = int(sys.argv[sys.argv.index('--minutes') + 1]) if '--minutes' in sys.argv else 95
 COPY = int(sys.argv[sys.argv.index('--copy') + 1]) if '--copy' in sys.argv else 0
 T_END = time.time() + MINUTES * 60
