@@ -161,15 +161,44 @@ if FROM_STOCK:
     log('bounded run over (from stock); held now:', held()); sys.exit(0)
 
 if SIX:
+    # A quick look first (under a minute, nothing asked of the desk): is there a circuit of 10 or 11 gates?  Then the
+    # row is taken from the desk by name BEFORE the proof is built (next --unit), so that it is ours alone while the
+    # file is generated and compiled; a row whose file does not compile here is handed back at once.
     while time.time() < T_END:
+        if len(held()) >= 5: time.sleep(5); continue
         g = claim(free_rows())
         if not g:
             log('no free row of the family left that we have not tried; looking again in a minute'); time.sleep(60); continue
-        step = g['id']; stmt = (g.get('statement') or '').strip()
-        out, why = build_six(step, stmt)
-        if not out: log('no proof for', step, '|', str(why)[:170]); continue
-        log('PROVED', step, '|', why)
-        send_proved(step, out, stmt)
+        want = g['id']; stmt = (g.get('statement') or '').strip()
+        pf = f'{S}/desk/six/probe_{want}.txt'; open(pf, 'w').write(stmt)
+        pr = subprocess.run(['python3', 'generator/sixinput/gen6k.py', '--probe', pf], capture_output=True, text=True)
+        if pr.returncode != 0:
+            open('/tmp/sweep_six_slow.txt', 'a').write(want + '\n'); log('left alone', want, '| no circuit of 10 or 11 gates found in the quick look'); continue
+        time.sleep(2 + COPY)
+        r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--unit', want], capture_output=True, text=True)
+        if r.returncode == 120: log('STOPPED by the project:', r.stdout.strip()[:200]); break
+        m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
+        if not m:
+            log('not leased', want, '|', r.stdout.strip().split('\n')[-1][:160])
+            if 'PAUSED' in r.stdout: time.sleep(60)
+            continue
+        step = m.group(1); hold(step, 'out_of_time')
+        if step != want:
+            log('the desk answered', step, 'instead of', want, '; handed back')
+            subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True); continue
+        lease = json.load(open(f'.pnp/{step}.json')); pts = (lease['lease'].get('terms') or {}).get('points')
+        log('TAKEN', step, '|', pts, 'points |', pr.stdout.strip()[-9:])
+        if lease['gap']['statement'].strip() != stmt or str(lease['gap'].get('pr_open', '0')) not in ('0', 'None'):
+            out, why = None, 'the leased statement differs from the list, or a pull request is already waiting'
+        else:
+            out, why = build_six(step, stmt)
+        if out and os.path.exists(f'.pnp/{step}.json'):
+            s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
+            last = (s.stdout + s.stderr).strip().split('\n')[-1][:160]
+            log('SENT' if 'release of' in last else 'NOT SENT', step, '|', pts, 'points |', why, '|', last)
+        else:
+            rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True)
+            log('handed back', step, '|', str(why)[:200], '|', rr.stdout.strip().split('\n')[-1][:80])
     log('bounded run over; held now:', held()); sys.exit(0)
 
 idle = 0

@@ -90,11 +90,16 @@ def build(step, stmt, seed=1, slice_len=6, log=print):
     # the one used, Lean's search finds a derivation and the file does not compile: nothing wrong can be sent.
     gates = None; outw = None
     g = least_at(T, 10, 45)
-    if not g: log('no circuit of 10 gates found in the time (the function needs 11 or more, or fewer than 10): left alone'); return None
-    gates, outw = g
-    for k, secs in ((9, 25), (8, 15), (7, 10)):
-        g = least_at(T, k, secs)
-        if not g: break
+    if g:
+        gates, outw = g
+        for k, secs in ((9, 25), (8, 15), (7, 10)):
+            g = least_at(T, k, secs)
+            if not g: break
+            gates, outw = g
+    else:
+        # 11 gates: such a file compiles in three to seven minutes here when it compiles at all
+        g = least_at(T, 11, 45)
+        if not g: log('no circuit of 10 or 11 gates found in the time: left alone'); return None
         gates, outw = g
     if not gates: log('no monotone circuit of 7 to 13 gates found'); return None
     m = len(gates); n = m - 2; k = m - 3; e = m - 7; out = outw
@@ -158,6 +163,13 @@ def build(step, stmt, seed=1, slice_len=6, log=print):
     return t, dict(m=m, k=k, e=e, near=nnear, seed=seed, slice=slice_len)
 
 if __name__ == '__main__':
+    if sys.argv[1] == '--probe':
+        # a quick look before a row is taken: is there a circuit of 10 or of 11 gates?
+        T = gen6.parse(open(sys.argv[2]).read().strip())
+        k = None
+        if T:
+            k = 10 if least_at(T[1], 10, 45) else 11 if least_at(T[1], 11, 45) else None
+        print('PROBE', k); sys.exit(0 if k else 4)
     step, sf, out = sys.argv[1:4]
     seed = int(sys.argv[4]) if len(sys.argv) > 4 else 1; sl = int(sys.argv[5]) if len(sys.argv) > 5 else 6
     r = build(step, open(sf).read().strip(), seed, sl)
