@@ -318,7 +318,8 @@ while time.time() < T_END:
         out, why = build(step, stmt)
     if out and os.path.exists(f'.pnp/{step}.json'):
         s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
-        log('SENT', step, '|', pts, 'points |', why, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
+        last = (s.stdout + s.stderr).strip().split('\n')[-1][:160]
+        log('SENT' if 'release of' in last else 'NOT SENT', step, '|', pts, 'points |', why, '|', last)
     else:
         rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True)
         log('handed back', step, '|', str(why)[:200], '|', rr.stdout.strip().split('\n')[-1][:80])
