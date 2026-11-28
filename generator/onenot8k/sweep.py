@@ -61,9 +61,16 @@ def claim(rows):
         rows = [g for g in rows if g['id'] not in done]
         if not rows: return None
         # the sparser graphs first: among them a least circuit of 14 gates or fewer is more common
-        ne = lambda g: 0 if SIX else len(re.findall(r'\d-\d', g.get('title', '')))
-        least = min(ne(g) for g in rows)
-        g = random.choice([g for g in rows if ne(g) == least]); f.write(g['id'] + '\n'); f.flush()
+        if SIX:
+            # the newest rows first: a fresh batch still holds 10 to 12-gate functions, the older rows are what
+            # every team has passed over
+            rows.sort(key=lambda g: (str(g.get('posted_at') or ''), g['id']), reverse=True)
+            g = random.choice(rows[:24])
+        else:
+            ne = lambda g: len(re.findall(r'\d-\d', g.get('title', '')))
+            least = min(ne(g) for g in rows)
+            g = random.choice([g for g in rows if ne(g) == least])
+        f.write(g['id'] + '\n'); f.flush()
         return g
 
 def gen_six(step, stmt):
