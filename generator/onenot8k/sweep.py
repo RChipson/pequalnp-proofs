@@ -72,7 +72,8 @@ def claim(rows):
             # the newest rows first: a fresh batch still holds 10 to 12-gate functions, the older rows are what
             # every team has passed over
             rows.sort(key=lambda g: (str(g.get('posted_at') or ''), g['id']), reverse=True)
-            g = random.choice(rows[:24])
+            # the search rows: any free row, so that we collide less with teams that go through the list in order
+            g = random.choice(rows if SEARCH else rows[:24])
         else:
             ne = lambda g: len(re.findall(r'\d-\d', g.get('title', '')))
             least = min(ne(g) for g in rows)
@@ -235,6 +236,13 @@ if SIX:
         want = g['id']; stmt = (g.get('statement') or '').strip()
         # the data and the file are made now (searches outside Lean, about a minute); the compile, which is the
         # proof being checked, comes after the row is taken
+        if SEARCH:
+            # GitHub is asked first here: on these rows other teams' pull requests arrive within minutes, and a
+            # search of up to two minutes for a row that is already answered is wasted
+            seen0 = subprocess.run(['gh', 'api', '-X', 'GET', 'search/issues', '-f', f'q=repo:open-goat/pequalnp-proofs is:pr in:title {want}',
+                                    '--jq', '[.items[] | select(.title == "' + want + '")] | length'], capture_output=True, text=True).stdout.strip()
+            if seen0 not in ('0', ''):
+                log('left alone', want, '| a pull request for it is already waiting (asked before the search)'); continue
         ready = gen_six(want, stmt)
         if not ready[0]:
             if SEARCH: log('left alone', want, '|', str(ready[1])[:110])
