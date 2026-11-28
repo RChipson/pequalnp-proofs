@@ -151,6 +151,12 @@ SIXF = ('False: for the monotone six-input f', 'False: six-input monotone f')
 def eight_file(step, stmt):
     # the dense graphs first (generator/onenot8k/gen8k.py: the search engine of a merged proof, with this graph's
     # data); the gate-elimination chain (generator/onenot8/gen8.py) is for the sparse ones
+    # a quick look first (a few seconds): with no circuit of 14 gates the graph needs 15 or more, and its file
+    # cannot be compiled on this machine; the full build of such a row took over ten minutes for nothing
+    pf = f'{S}/desk/onenot8k/probe_{step}.txt'; os.makedirs(os.path.dirname(pf), exist_ok=True); open(pf, 'w').write(stmt)
+    pr = subprocess.run(['python3', 'generator/onenot8k/gen8k.py', '--probe', pf, '8'], capture_output=True, text=True)
+    if pr.returncode != 0 and 'PROBE' in pr.stdout:
+        return None, 'no circuit of 14 gates in the quick look: a graph of 15 gates or more, beyond this machine'
     out, why = six_file(step, stmt, 'generator/onenot8k/gen8k.py', 'onenot8k')
     if out: return out, why
     log('dense eight-vertex generator, no file for', step, ':', str(why)[-300:].replace('\n', ' '))
