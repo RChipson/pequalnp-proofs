@@ -180,7 +180,7 @@ if SIX:
         # proof being checked, comes after the row is taken
         ready = gen_six(want, stmt)
         if not ready[0]:
-            open('/tmp/sweep_six_slow.txt', 'a').write(want + '\n'); log('left alone', want, '| no circuit of 12 gates or fewer found in the quick look'); continue
+            open('/tmp/sweep_six_slow.txt', 'a').write(want + '\n'); log('left alone', want, '| no circuit of 10 or 11 gates found in the quick look'); continue
         # the public list runs minutes behind: GitHub is asked whether a pull request for this row is already waiting
         seen = subprocess.run(['gh', 'api', '-X', 'GET', 'search/issues', '-f', f'q=repo:open-goat/pequalnp-proofs is:pr in:title {want}',
                                '--jq', '[.items[] | select(.title == "' + want + '")] | length'], capture_output=True, text=True).stdout.strip()
