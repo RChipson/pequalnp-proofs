@@ -89,19 +89,15 @@ def build(step, stmt, seed=1, slice_len=6, log=print):
     # 10 gates are tried first, then smaller sizes while they are found.  If the true least size is smaller than
     # the one used, Lean's search finds a derivation and the file does not compile: nothing wrong can be sent.
     gates = None; outw = None
-    g = least_at(T, 10, 45)
-    if g:
+    # (28 Nov, later) The rows still free mostly need 12 gates, so the look now starts at 12 and goes down while a
+    # circuit is found; the first size that gives nothing within the time ends the descent.
+    g = least_at(T, 12, 60)
+    if not g: log('no circuit of 12 gates found in the time: left alone'); return None
+    gates, outw = g
+    for k, secs in ((11, 45), (10, 45), (9, 25), (8, 15), (7, 10)):
+        g = least_at(T, k, secs)
+        if not g: break
         gates, outw = g
-        for k, secs in ((9, 25), (8, 15), (7, 10)):
-            g = least_at(T, k, secs)
-            if not g: break
-            gates, outw = g
-    else:
-        # 11 gates: such a file compiles in three to seven minutes here when it compiles at all
-        g = least_at(T, 11, 45)
-        if not g: log('no circuit of 10 or 11 gates found in the time: left alone'); return None
-        gates, outw = g
-    if not gates: log('no monotone circuit of 7 to 13 gates found'); return None
     m = len(gates); n = m - 2; k = m - 3; e = m - 7; out = outw
     ps, nnear = pairs_for(T, seed)
     row = lambda j: sum((p >> j & 1) << i for i, (p, q) in enumerate(ps)) | sum((q >> j & 1) << (128 + i) for i, (p, q) in enumerate(ps))
