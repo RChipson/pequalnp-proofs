@@ -58,7 +58,10 @@ def claim(rows):
         fcntl.flock(f, fcntl.LOCK_EX); f.seek(0); done = set(f.read().split())
         rows = [g for g in rows if g['id'] not in done]
         if not rows: return None
-        g = random.choice(rows); f.write(g['id'] + '\n'); f.flush()
+        # the sparser graphs first: among them a least circuit of 14 gates or fewer is more common
+        ne = lambda g: len(re.findall(r'\d-\d', g.get('title', '')))
+        least = min(ne(g) for g in rows)
+        g = random.choice([g for g in rows if ne(g) == least]); f.write(g['id'] + '\n'); f.flush()
         return g
 
 def build(step, stmt):
