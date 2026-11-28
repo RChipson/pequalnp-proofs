@@ -181,6 +181,11 @@ if SIX:
         ready = gen_six(want, stmt)
         if not ready[0]:
             open('/tmp/sweep_six_slow.txt', 'a').write(want + '\n'); log('left alone', want, '| no circuit of 10 or 11 gates found in the quick look'); continue
+        # the public list runs minutes behind: GitHub is asked whether a pull request for this row is already waiting
+        seen = subprocess.run(['gh', 'api', '-X', 'GET', 'search/issues', '-f', f'q=repo:open-goat/pequalnp-proofs is:pr in:title {want}',
+                               '--jq', '[.items[] | select(.title == "' + want + '")] | length'], capture_output=True, text=True).stdout.strip()
+        if seen not in ('0', ''):
+            log('left alone', want, '| a pull request for it is already waiting'); continue
         time.sleep(2 + COPY)
         r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--unit', want], capture_output=True, text=True)
         if r.returncode == 120: log('STOPPED by the project:', r.stdout.strip()[:200]); break
