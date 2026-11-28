@@ -18,15 +18,19 @@ REPO = '/home/user/pequalnp-proofs'
 os.chdir(REPO)
 ENV = dict(os.environ, PATH=os.path.expanduser('~/.elan/bin') + ':' + os.environ['PATH'])
 # --family six: rows "Table 2: for the monotone six-input f with table ..." (generator/sixinput/gen6k.py)
-SIX = '--family' in sys.argv and sys.argv[sys.argv.index('--family') + 1] == 'six'
-FAMILY = 'Table 2: for the monotone six-input f' if SIX else 'At fan-in two, one NOT gate saves nothing on edges'
+FAM = sys.argv[sys.argv.index('--family') + 1] if '--family' in sys.argv else 'onenot'
+# --family three: rows "Three ordered outputs a, b, c fit / exceed N gates ..." (generator/threeout); they go
+# through the same loop as the six-input rows
+THREE = FAM == 'three'
+SIX = FAM in ('six', 'three')
+FAMILY = 'Three ordered outputs' if THREE else 'Table 2: for the monotone six-input f' if SIX else 'At fan-in two, one NOT gate saves nothing on edges'
 MINUTES = int(sys.argv[sys.argv.index('--minutes') + 1]) if '--minutes' in sys.argv else 95
 COPY = int(sys.argv[sys.argv.index('--copy') + 1]) if '--copy' in sys.argv else 0
 T_END = time.time() + MINUTES * 60
-TRIED = '/tmp/sweep_tried_six.txt' if SIX else '/tmp/sweep_tried.txt'      # rows some copy has already asked for
+TRIED = '/tmp/sweep_tried_three.txt' if THREE else '/tmp/sweep_tried_six.txt' if SIX else '/tmp/sweep_tried.txt'      # rows already asked for
 LIST = f'{S}/gaps_sweep.json'
 
-LOGF = ['/tmp/loop_now.log', '/tmp/loop_1.log', '/tmp/loop_2.log'][COPY % 3]     # the files the half-hourly check reads
+LOGF = '/tmp/loop_three.log' if THREE else ['/tmp/loop_now.log', '/tmp/loop_1.log', '/tmp/loop_2.log'][COPY % 3]     # the files the checks read
 open(LOGF, 'w').close()
 def log(*a):
     line = ' '.join(str(x) for x in (time.strftime('%H:%M:%S', time.gmtime()),) + a)
@@ -73,7 +77,21 @@ def claim(rows):
         f.write(g['id'] + '\n'); f.flush()
         return g
 
+class _R:            # what the compile step reads from a generator's run
+    def __init__(self, text): self.stdout = text; self.returncode = 0
+
+def gen_three(step, stmt):
+    # the true side is known from a short search; a file is written only for a true row
+    d = f'{S}/desk/three'; os.makedirs(d, exist_ok=True)
+    sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
+    out = f'{d}/{step.replace("-", "_")}.lean'
+    script = 'generator/threeout/genexceed.py' if stmt.startswith('¬') else 'generator/threeout/genfit.py'
+    r = subprocess.run(['python3', script, step, sf, out], capture_output=True, text=True, timeout=300)
+    if r.returncode != 0: return None, (r.stdout + r.stderr).strip()[-120:].replace('\n', ' ')
+    return out, _R('exceed' if stmt.startswith('¬') else 'fit')
+
 def gen_six(step, stmt):
+    if THREE: return gen_three(step, stmt)
     # the data and the file (searches outside Lean only); nothing is compiled here
     d = f'{S}/desk/six/k'; os.makedirs(d, exist_ok=True)
     sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
@@ -196,7 +214,8 @@ if SIX:
         # proof being checked, comes after the row is taken
         ready = gen_six(want, stmt)
         if not ready[0]:
-            open('/tmp/sweep_six_slow.txt', 'a').write(want + '\n'); log('left alone', want, '| no circuit of 10, 11 or 12 gates found in the quick look'); continue
+            if not THREE: open('/tmp/sweep_six_slow.txt', 'a').write(want + '\n'); log('left alone', want, '| no circuit of 10, 11 or 12 gates found in the quick look')
+            continue
         # the public list runs minutes behind: GitHub is asked whether a pull request for this row is already waiting
         seen = subprocess.run(['gh', 'api', '-X', 'GET', 'search/issues', '-f', f'q=repo:open-goat/pequalnp-proofs is:pr in:title {want}',
                                '--jq', '[.items[] | select(.title == "' + want + '")] | length'], capture_output=True, text=True).stdout.strip()
