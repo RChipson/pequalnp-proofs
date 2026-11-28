@@ -83,18 +83,18 @@ def build(step, stmt, seed=1, slice_len=6, log=print):
         if all(f(x) == f(x ^ (1 << j)) for x in range(64)): log(f'the function ignores input {j}: not this method'); return None
     if any(f(x) and not f(x | (1 << j)) for x in range(64) for j in range(N)): log('not monotone'); return None
     gates = None
-    # The fewest gates found, looking DOWN from 12: a circuit of a size that exists is found in seconds, while
-    # showing that none exists takes long, so the first size that gives nothing within the time ends the descent.
-    # If the true least size is smaller than the one used, Lean's search finds a derivation and the file does not
-    # compile: nothing wrong can be sent.
+    # The witness.  Files of functions that need 10 gates compile in about 20 seconds; with 11 gates the search
+    # inside the proof takes many minutes (too long for the checker's limit), so those are left alone for now.
+    # A circuit of a size that exists is usually found in seconds, while showing that none exists takes long:
+    # 10 gates are tried first, then smaller sizes while they are found.  If the true least size is smaller than
+    # the one used, Lean's search finds a derivation and the file does not compile: nothing wrong can be sent.
     gates = None; outw = None
-    for k in (12, 11, 10, 9, 8, 7):
-        g = least_at(T, k, 40 if k >= 9 else 25)
-        if not g:
-            if gates is None and k == 12:
-                g = least_at(T, 13, 60)
-                if g: gates, outw = g
-            break
+    g = least_at(T, 10, 45)
+    if not g: log('no circuit of 10 gates found in the time (the function needs 11 or more, or fewer than 10): left alone'); return None
+    gates, outw = g
+    for k, secs in ((9, 25), (8, 15), (7, 10)):
+        g = least_at(T, k, secs)
+        if not g: break
         gates, outw = g
     if not gates: log('no monotone circuit of 7 to 13 gates found'); return None
     m = len(gates); n = m - 2; k = m - 3; e = m - 7; out = outw
