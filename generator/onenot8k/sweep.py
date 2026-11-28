@@ -104,7 +104,57 @@ def build(step, stmt):
     if c.returncode != 0: return None, f'{gates} gates; does not compile here: ' + c.stdout.strip()[-200:].replace('\n', ' ')
     return out, r.stdout.strip().split('\n')[-1][-80:] + ' | ' + last
 
-log('sweep copy', COPY, 'for', MINUTES, 'minutes; swap', swap_kb() // 1000000, 'GB')
+PREPARE = '--prepare' in sys.argv; FROM_STOCK = '--from-stock' in sys.argv
+STOCK = f'{S}/desk/six/stock'; os.makedirs(STOCK, exist_ok=True)
+log('sweep copy', COPY, 'for', MINUTES, 'minutes; swap', swap_kb() // 1000000, 'GB', '| prepare only' if PREPARE else '| from stock' if FROM_STOCK else '')
+
+def stock_one(g):
+    # a proof made ahead of time (join.txt: reading ahead and preparing is welcome); nothing is asked of the desk
+    step = g['id']; stmt = (g.get('statement') or '').strip()
+    out, why = build_six(step, stmt)
+    if not out: log('no proof for', step, '|', str(why)[:160]); return
+    dst = f'{STOCK}/{step.replace("-", "_")}.lean'; os.replace(out, dst); open(dst + '.stmt', 'w').write(stmt)
+    log('STOCKED', step, '|', why)
+
+if PREPARE:
+    assert SIX
+    TRIED = '/tmp/sweep_stocked_six.txt'
+    while time.time() < T_END:
+        g = claim(free_rows())
+        if not g: time.sleep(60); continue
+        stock_one(g)
+    log('bounded run over (prepare only)'); sys.exit(0)
+
+if FROM_STOCK:
+    assert SIX
+    names = sorted(f[:-5] for f in os.listdir(STOCK) if f.endswith('.lean'))
+    for nm in names:
+        if time.time() > T_END: break
+        step = nm.replace('_', '-'); src = f'{STOCK}/{nm}.lean'
+        free = {g['id']: g for g in free_rows()}
+        if step not in free:
+            log('stocked', step, 'is no longer free; left unsent'); os.replace(src, src + '.gone'); continue
+        if (free[step].get('statement') or '').strip() != open(src + '.stmt').read().strip():
+            log('stocked', step, ': the statement changed; left unsent'); continue
+        while len(held()) >= 5: time.sleep(5)
+        time.sleep(4)
+        r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--proof-of', step], capture_output=True, text=True)
+        m = re.search(r'^STEP\s+(L-[a-z]+-\d+)', r.stdout, re.M)
+        if not m or m.group(1) != step:
+            log('not leased', step, '|', r.stdout.strip().split('\n')[-1][:160])
+            if m: subprocess.run(['python3', 'generator/desk.py', 'release', m.group(1), 'other'], capture_output=True, text=True)
+            if 'PAUSED' in r.stdout: time.sleep(60)
+            continue
+        hold(step, 'out_of_time')
+        lease = json.load(open(f'.pnp/{step}.json')); pts = (lease['lease'].get('terms') or {}).get('points')
+        if lease['gap']['statement'].strip() != open(src + '.stmt').read().strip():
+            log(step, ': the leased statement differs from the stocked one; handed back')
+            subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True); continue
+        s = subprocess.run(['bash', 'generator/submit.sh', step, src], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
+        log('SENT', step, '|', pts, 'points | from stock |', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
+        os.replace(src, src + '.sent')
+    log('bounded run over (from stock); held now:', held()); sys.exit(0)
+
 idle = 0
 while time.time() < T_END:
     if len(held()) >= 5: time.sleep(5); continue
@@ -142,7 +192,7 @@ while time.time() < T_END:
     else:
         out, why = build(step, stmt)
     if out and os.path.exists(f'.pnp/{step}.json'):
-        s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1'))
+        s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
         log('SENT', step, '|', pts, 'points |', why, '|', (s.stdout + s.stderr).strip().split('\n')[-1][:160])
     else:
         rr = subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True)

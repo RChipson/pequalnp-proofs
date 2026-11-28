@@ -40,7 +40,13 @@ CODE=$(curl -sS -m 30 -o $W/beat.json -w '%{http_code}' -X POST "https://pequaln
 # A pull request for the same step may already be waiting (the desk's list of them runs minutes behind): then
 # a second one only burdens the checker, and the desk pauses a handle that keeps sending such duplicates.
 # GitHub is asked directly; if it cannot be asked, nothing is sent.
-SEEN=$(gh api -X GET search/issues -f q="repo:open-goat/pequalnp-proofs is:pr in:title $ID" --jq '[.items[] | select(.title | test("(^|[^0-9A-Za-z-])'$ID'($|[^0-9])"))] | length' 2>/dev/null || echo "?")
+SEEN="?"
+# the search is limited to a few calls a minute: when it cannot be asked, it is asked again a little later (three tries)
+for try in 1 2 3; do
+  SEEN=$(gh api -X GET search/issues -f q="repo:open-goat/pequalnp-proofs is:pr in:title $ID" --jq '[.items[] | select(.title | test("(^|[^0-9A-Za-z-])'$ID'($|[^0-9])"))] | length' 2>/dev/null || echo "?")
+  [ "$SEEN" != "?" ] && break
+  sleep 25
+done
 if [ "$SEEN" != 0 ]; then
   echo "a pull request for $ID is already there, or GitHub could not be asked ($SEEN): nothing is sent"
   python3 generator/desk.py release $STEP other | tail -1
@@ -96,13 +102,13 @@ echo "pushed $ID at $(git rev-parse --short $COMMIT)$NOTE, $(date -u)"
 flock -u 9; exec 9>&-
 REASON=submitted; [ "${ID#R-}" != "$ID" ] && REASON=reduced
 wait_and_release() {
-  for i in $(seq 1 90); do
-    sleep 10
+  for i in $(seq 1 45); do
+    sleep 20
     # our own pull request, not somebody else's on the same step
     if [ "$(gh api -X GET search/issues -f q="repo:open-goat/pequalnp-proofs is:pr author:RChipson in:title $ID" --jq '[.items[] | select(.title == "'$ID'")] | length' 2>/dev/null)" = 1 ]; then
       python3 generator/desk.py release $STEP $REASON; break
     fi
-    [ $i = 90 ] && echo "no pull request seen after 15 minutes: lease NOT released, look at the workflow run"
+    [ $i = 45 ] && echo "no pull request seen after 15 minutes: lease NOT released, look at the workflow run"
   done
 }
 if [ -n "$BG_RELEASE" ]; then
