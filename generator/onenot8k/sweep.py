@@ -66,7 +66,8 @@ def claim(rows):
         g = random.choice([g for g in rows if ne(g) == least]); f.write(g['id'] + '\n'); f.flush()
         return g
 
-def build_six(step, stmt):
+def gen_six(step, stmt):
+    # the data and the file (searches outside Lean only); nothing is compiled here
     d = f'{S}/desk/six/k'; os.makedirs(d, exist_ok=True)
     sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
     out = f'{d}/{step.replace("-", "_")}.lean'
@@ -75,6 +76,11 @@ def build_six(step, stmt):
     except subprocess.TimeoutExpired:
         return None, 'the search for a witness circuit timed out'
     if r.returncode != 0: return None, (r.stdout + r.stderr).strip()[-200:].replace('\n', ' ')
+    return out, r
+
+def build_six(step, stmt, ready=None):
+    out, r = ready if ready else gen_six(step, stmt)
+    if not out: return None, r
     c = subprocess.run(f'flock /tmp/lean_six_{COPY % 2}.lock python3 generator/onenot8k/compile_capped.py {out} 40 420', shell=True,
                        capture_output=True, text=True, env=ENV)
     last = (c.stdout.strip().split('\n') or [''])[-1]
@@ -170,9 +176,10 @@ if SIX:
         if not g:
             log('no free row of the family left that we have not tried; looking again in a minute'); time.sleep(60); continue
         want = g['id']; stmt = (g.get('statement') or '').strip()
-        pf = f'{S}/desk/six/probe_{want}.txt'; open(pf, 'w').write(stmt)
-        pr = subprocess.run(['python3', 'generator/sixinput/gen6k.py', '--probe', pf], capture_output=True, text=True)
-        if pr.returncode != 0:
+        # the data and the file are made now (searches outside Lean, about a minute); the compile, which is the
+        # proof being checked, comes after the row is taken
+        ready = gen_six(want, stmt)
+        if not ready[0]:
             open('/tmp/sweep_six_slow.txt', 'a').write(want + '\n'); log('left alone', want, '| no circuit of 10 or 11 gates found in the quick look'); continue
         time.sleep(2 + COPY)
         r = subprocess.run(['python3', 'generator/desk.py', 'next', '--another', '--unit', want], capture_output=True, text=True)
@@ -187,11 +194,11 @@ if SIX:
             log('the desk answered', step, 'instead of', want, '; handed back')
             subprocess.run(['python3', 'generator/desk.py', 'release', step, 'other'], capture_output=True, text=True); continue
         lease = json.load(open(f'.pnp/{step}.json')); pts = (lease['lease'].get('terms') or {}).get('points')
-        log('TAKEN', step, '|', pts, 'points |', pr.stdout.strip()[-9:])
+        log('TAKEN', step, '|', pts, 'points')
         if lease['gap']['statement'].strip() != stmt or str(lease['gap'].get('pr_open', '0')) not in ('0', 'None'):
             out, why = None, 'the leased statement differs from the list, or a pull request is already waiting'
         else:
-            out, why = build_six(step, stmt)
+            out, why = build_six(step, stmt, ready)
         if out and os.path.exists(f'.pnp/{step}.json'):
             s = subprocess.run(['bash', 'generator/submit.sh', step, out], capture_output=True, text=True, env=dict(ENV, NOCHECK='1', BG_RELEASE='1'))
             last = (s.stdout + s.stderr).strip().split('\n')[-1][:160]
