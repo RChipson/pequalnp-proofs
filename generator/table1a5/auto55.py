@@ -109,8 +109,10 @@ def six_file(step, stmt, script='generator/sixinput/gen6.py', sub='six'):
         except Exception: gates = 0
         try: swap_kb = int(re.search(r'SwapTotal:\s+(\d+) kB', open('/proc/meminfo').read()).group(1))
         except Exception: swap_kb = 0
-        if gates >= 15 and swap_kb < 8000000:
-            return None, f'a {gates}-gate graph: its file needs more memory to compile than this machine has'
+        # even with swap a 15-gate file takes over ten minutes and about 20 GB here: tried only when the file
+        # /tmp/heavy_ok says so (set by hand once that path has been seen to work)
+        if gates >= 15 and (swap_kb < 8000000 or not os.path.exists('/tmp/heavy_ok')):
+            return None, f'a {gates}-gate graph: its file needs more memory and time to compile than this machine has'
         cap = '40' if swap_kb >= 8000000 else '12.0'       # with swap the kernel's own limit pages out instead
         pre = 'LEAN_ARGS=-j1 ' if gates >= 15 else ''
         c = subprocess.run(f'{pre}{lock}python3 generator/onenot8k/compile_capped.py {out} {cap}', shell=True,
