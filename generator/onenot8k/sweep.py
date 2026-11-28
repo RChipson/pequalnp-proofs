@@ -98,9 +98,9 @@ def gen_search(step, stmt):
     d = f'{S}/desk/sweep_{FAM}'; os.makedirs(d, exist_ok=True)
     sf = f'{d}/stmt_{step}.txt'; open(sf, 'w').write(stmt)
     out = f'{d}/{step.replace("-", "_")}.lean'
-    cmd = ['python3', 'generator/encoder/rowrect.py', step, sf, out] if FAM == 'promise' else ['python3', 'generator/twolit/twolit.py', step, sf, out, '90']
+    cmd = ['python3', 'generator/encoder/rowrect2.py', step, sf, out] if FAM == 'promise' else ['python3', 'generator/twolit/twolit.py', step, sf, out, '90']
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300 if FAM == 'promise' else 120)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=600 if FAM == 'promise' else 120)
     except subprocess.TimeoutExpired:
         return None, 'the search did not end in time'
     if r.returncode != 0 or not os.path.exists(out): return None, (r.stdout + r.stderr).strip()[-120:].replace('\n', ' ')
