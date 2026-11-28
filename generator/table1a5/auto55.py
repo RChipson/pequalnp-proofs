@@ -179,6 +179,7 @@ NOTROW = re.compile(r'∃ C : PEqualNP\.CircuitLowerBounds\.Circuit, PEqualNP\.M
 MINUTES = int(sys.argv[sys.argv.index('--minutes') + 1]) if '--minutes' in sys.argv else 100
 T_END = time.time() + MINUTES * 60
 COPY = int(sys.argv[sys.argv.index('--copy') + 1]) if '--copy' in sys.argv else 0
+MAXH = int(sys.argv[sys.argv.index('--max-held') + 1]) if '--max-held' in sys.argv else 5
 WAIT_BURST, WAIT_QUIET = 9, 45
 while True:
     if time.time() > T_END:
@@ -186,7 +187,7 @@ while True:
     # join.txt: take the unit from the desk before proving it (it is then ours alone and earns its lease price);
     # never sit idle; one request every few seconds at most; only a hard unit must be given twenty minutes.
     burst = os.path.exists('/tmp/ask_now') and time.time() - os.path.getmtime('/tmp/ask_now') < 45
-    if len(held()) >= 5:        # the desk lets an agent hold five units
+    if len(held()) >= MAXH:     # the desk lets an agent hold five units; --max-held leaves room for the sweeps
         time.sleep(2); continue
     ASK += 1
     # While the desk offers only a few units, most requests carry no filter: the new units are listed with no level,
