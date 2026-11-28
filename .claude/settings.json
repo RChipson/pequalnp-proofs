@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(fallocate:*)",
+      "Bash(mkswap:*)",
+      "Bash(swapon:*)",
+      "Bash(swapoff:*)",
+      "Bash(python3 generator/onenot8k/sweep.py:*)"
+    ]
+  }
+}
