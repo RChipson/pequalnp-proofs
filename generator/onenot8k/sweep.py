@@ -117,7 +117,10 @@ def build(step, stmt):
         return None, f'a {gates}-gate graph: its file takes too long and too much memory to compile here'
     # one compile at a time; a 15-gate file on one thread, so that only one heavy step is in memory at a time
     pre = 'LEAN_ARGS=-j1 ' if gates >= 15 else ''
-    c = subprocess.run(f'{pre}flock /tmp/lean.lock python3 generator/onenot8k/compile_capped.py {out} {"40" if sw else "12.0"}', shell=True,
+    # at most 12 GB and seven minutes: the 14-gate files that were accepted needed 5 to 11 GB and under three
+    # minutes; one that needs more would only block the queue (on 28 Nov one ran 23 minutes in swap and two leases
+    # ran out behind it)
+    c = subprocess.run(f'{pre}flock /tmp/lean.lock python3 generator/onenot8k/compile_capped.py {out} 12.0 420', shell=True,
                        capture_output=True, text=True, env=ENV)
     last = (c.stdout.strip().split('\n') or [''])[-1]
     if c.returncode != 0: return None, f'{gates} gates; does not compile here: ' + c.stdout.strip()[-200:].replace('\n', ' ')
